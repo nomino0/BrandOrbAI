@@ -108,10 +108,10 @@ export default function CriticalReportPage() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <FileText className="h-5 w-5 text-blue-600" />
-                      Overall Progress
+                      SWOT Analysis Progress
                     </CardTitle>
                     <CardDescription>
-                      {completedSteps} of {steps.length} steps completed
+                      {completedSteps} of {steps.length} analysis components completed
                     </CardDescription>
                   </div>
                   <div className="text-right">
@@ -126,83 +126,100 @@ export default function CriticalReportPage() {
             </Card>
           </motion.div>
 
-          {/* Steps Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {steps.map((step, index) => (
-              <motion.div
-                key={step.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 * index }}
-              >
-                <Card className={`${
-                  step.status === "locked" ? "opacity-60" : ""
-                } hover:shadow-md transition-shadow duration-200`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Step {step.id}
-                          </span>
-                          {getStatusIcon(step.status)}
+          {/* SWOT Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {steps.map((step, index) => {
+              const getStepDescription = (id: number) => {
+                switch(id) {
+                  case 1: return "Internal capabilities and resources that give a competitive advantage";
+                  case 2: return "Internal limitations that hinder performance";
+                  case 3: return "External factors that could be beneficial";
+                  case 4: return "External factors that could negatively impact";
+                  default: return "";
+                }
+              };
+
+              return (
+                <motion.div
+                  key={step.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.1 * index }}
+                >
+                  <Card className={`${
+                    step.status === "locked" ? "opacity-60" : ""
+                  } hover:shadow-md transition-shadow duration-200 h-full`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {step.id === 1 ? "Strengths" : 
+                               step.id === 2 ? "Weaknesses" : 
+                               step.id === 3 ? "Opportunities" : "Threats"}
+                            </span>
+                            {getStatusIcon(step.status)}
+                          </div>
+                          <CardTitle className="text-sm">{step.title}</CardTitle>
+                          <CardDescription className="text-xs">
+                            {getStepDescription(step.id)}
+                          </CardDescription>
                         </div>
-                        <CardTitle className="text-sm">{step.title}</CardTitle>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs ${getStatusColor(step.status)}`}
+                        >
+                          {step.status === "completed" ? "Done" : 
+                           step.status === "current" ? "Active" : "Locked"}
+                        </Badge>
                       </div>
-                      <Badge 
-                        variant="outline" 
-                        className={`text-xs ${getStatusColor(step.status)}`}
-                      >
-                        {step.status === "completed" ? "Done" : 
-                         step.status === "current" ? "Active" : "Locked"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  
-                  <CardContent className="space-y-3">
-                    {step.status === "current" && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-muted-foreground">Progress</span>
-                          <span className="text-muted-foreground">{step.progress}%</span>
-                        </div>
-                        <Progress value={step.progress} className="h-1" />
-                      </div>
-                    )}
+                    </CardHeader>
                     
-                    <div className="pt-2">
-                      <Button
-                        asChild={step.status !== "locked"}
-                        disabled={step.status === "locked"}
-                        variant={step.status === "current" ? "default" : "outline"}
-                        size="sm"
-                        className="w-full"
-                      >
-                        {step.status === "locked" ? (
-                          <span>
-                            <Lock className="h-3 w-3 mr-2" />
-                            Locked
-                          </span>
-                        ) : step.status === "completed" ? (
-                          <Link href={`/dashboard/critical-report/${step.id}`}>
-                            View Results
-                            <ArrowRight className="h-3 w-3 ml-2" />
-                          </Link>
-                        ) : (
-                          <Link href={`/dashboard/critical-report/${step.id}`}>
-                            <Play className="h-3 w-3 mr-2" />
-                            Continue
-                          </Link>
-                        )}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                    <CardContent className="space-y-3">
+                      {step.status === "current" && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Progress</span>
+                            <span className="text-muted-foreground">{step.progress}%</span>
+                          </div>
+                          <Progress value={step.progress} className="h-1" />
+                        </div>
+                      )}
+                      
+                      <div className="pt-2">
+                        <Button
+                          asChild={step.status !== "locked"}
+                          disabled={step.status === "locked"}
+                          variant={step.status === "current" ? "default" : "outline"}
+                          size="sm"
+                          className="w-full"
+                        >
+                          {step.status === "locked" ? (
+                            <span>
+                              <Lock className="h-3 w-3 mr-2" />
+                              Locked
+                            </span>
+                          ) : step.status === "completed" ? (
+                            <Link href={`/dashboard/critical-report/${step.id}`}>
+                              View Analysis
+                              <ArrowRight className="h-3 w-3 ml-2" />
+                            </Link>
+                          ) : (
+                            <Link href={`/dashboard/critical-report/${step.id}`}>
+                              <Play className="h-3 w-3 mr-2" />
+                              Analyze
+                            </Link>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
           </div>
 
-          {/* Final Report Card */}
+          {/* Final SWOT Report Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -210,19 +227,19 @@ export default function CriticalReportPage() {
           >
             <StageSkeleton
               stage={{
-                title: "Generate Final Report",
-                description: "Compile all analysis into a comprehensive business validation report",
+                title: "Generate SWOT Analysis Report",
+                description: "Compile all SWOT analysis into a comprehensive strategic assessment report",
                 status: completedSteps === steps.length ? "current" : "locked",
                 features: [
-                  "Executive summary with key findings",
-                  "Market opportunity assessment", 
-                  "Competitive landscape analysis",
-                  "Financial projections and modeling",
-                  "Risk analysis and mitigation strategies",
-                  "Recommended next steps"
+                  "Complete strengths and competitive advantages summary",
+                  "Detailed weaknesses and improvement areas", 
+                  "Market opportunities and growth potential analysis",
+                  "Risk assessment and threat mitigation strategies",
+                  "Strategic recommendations based on SWOT findings",
+                  "Action plan for leveraging strengths and addressing weaknesses"
                 ],
-                estimatedTime: "5-10 minutes",
-                actionText: "Generate Report",
+                estimatedTime: "3-5 minutes",
+                actionText: "Generate SWOT Report",
                 onAction: () => {
                   if (completedSteps === steps.length) {
                     window.location.href = "/dashboard/critical-report/report";

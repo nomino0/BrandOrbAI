@@ -1,6 +1,10 @@
 "use client"
 
 import * as React from "react"
+import { useState, useEffect } from "react"
+import { useTheme } from "next-themes"
+import Image from "next/image"
+import Link from "next/link"
 import {
   IconCheck,
   IconCircle,
@@ -41,55 +45,30 @@ const data = {
       items: [],
     },
     {
-      title: "Stage 2: Critical Report",
+      title: "Stage 2: SWOT Analysis",
       url: "/dashboard/critical-report",
       icon: IconFileText,
       status: "current",
       progress: 0,
       items: [
         {
-          title: "Market Research",
+          title: "Strengths Analysis",
           url: "/dashboard/critical-report/1",
           status: "locked",
         },
         {
-          title: "Opportunities",
+          title: "Weaknesses Analysis",
           url: "/dashboard/critical-report/2",
           status: "locked",
         },
         {
-          title: "Value Proposition",
+          title: "Opportunities Analysis",
           url: "/dashboard/critical-report/3",
           status: "locked",
         },
         {
-          title: "Competitor Analysis",
+          title: "Threats Analysis",
           url: "/dashboard/critical-report/4",
-          status: "locked",
-        },
-        {
-          title: "Revenue Model",
-          url: "/dashboard/critical-report/5",
-          status: "locked",
-        },
-        {
-          title: "Legal Assessment",
-          url: "/dashboard/critical-report/6",
-          status: "locked",
-        },
-        {
-          title: "Marketing Strategy",
-          url: "/dashboard/critical-report/7",
-          status: "locked",
-        },
-        {
-          title: "Financial Projections",
-          url: "/dashboard/critical-report/8",
-          status: "locked",
-        },
-        {
-          title: "Implementation Plan",
-          url: "/dashboard/critical-report/9",
           status: "locked",
         },
       ],
@@ -132,21 +111,36 @@ function getStatusIcon(status: string, progress?: number) {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [mounted, setMounted] = useState(false)
+  const { resolvedTheme } = useTheme()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <IconBulb className="size-4" />
+              <Link href="/dashboard" className="flex items-center space-x-2">
+                <div className="relative h-9 w-auto">
+                  {!mounted ? (
+                    // Placeholder during hydration
+                    <div className="h-9 w-[138px] bg-sidebar-accent animate-pulse rounded" />
+                  ) : (
+                    <Image
+                      src={resolvedTheme === 'dark' ? '/logo/dark.svg' : '/logo/white.svg'}
+                      alt="BrandOrb AI"
+                      width={138}
+                      height={36}
+                      className="h-9 w-[138px] object-contain"
+                      priority
+                    />
+                  )}
                 </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">BrandOrbAI</span>
-                  <span className="truncate text-xs">Product Development</span>
-                </div>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

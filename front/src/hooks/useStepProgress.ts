@@ -10,15 +10,10 @@ export interface StepData {
 }
 
 const INITIAL_STEPS: StepData[] = [
-  { id: 1, title: "Market Research", status: "locked", progress: 0 },
-  { id: 2, title: "Competitive Analysis", status: "locked", progress: 0 },
-  { id: 3, title: "Target Audience Analysis", status: "locked", progress: 0 },
-  { id: 4, title: "Value Proposition Design", status: "locked", progress: 0 },
-  { id: 5, title: "Revenue Model Analysis", status: "locked", progress: 0 },
-  { id: 6, title: "Risk Assessment", status: "locked", progress: 0 },
-  { id: 7, title: "Marketing Strategy", status: "locked", progress: 0 },
-  { id: 8, title: "Financial Projections", status: "locked", progress: 0 },
-  { id: 9, title: "Implementation Plan", status: "locked", progress: 0 },
+  { id: 1, title: "Strengths Analysis", status: "locked", progress: 0 },
+  { id: 2, title: "Weaknesses Analysis", status: "locked", progress: 0 },
+  { id: 3, title: "Opportunities Analysis", status: "locked", progress: 0 },
+  { id: 4, title: "Threats Analysis", status: "locked", progress: 0 },
 ];
 
 export function useStepProgress() {
@@ -49,9 +44,9 @@ export function useStepProgress() {
 
   const updateStepsAfterValidation = () => {
     const updatedSteps = INITIAL_STEPS.map((step, index) => {
-      if (index <= 7) { // Steps 1-8 completed after validation
+      if (index <= 2) { // Steps 1-3 completed after validation
         return { ...step, status: 'completed' as StepStatus, progress: 100 };
-      } else if (index === 8) { // Step 9 becomes current
+      } else if (index === 3) { // Step 4 becomes current
         return { ...step, status: 'current' as StepStatus, progress: 0 };
       }
       return step;

@@ -46,7 +46,7 @@ export function NavMain({
   }[]
 }) {
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({
-    "Stage 2: Critical Report": true, // Keep critical report expanded by default
+    "Stage 2: SWOT Analysis": true, // Keep SWOT analysis expanded by default
   })
 
   const toggleItem = (title: string) => {
