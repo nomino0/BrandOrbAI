@@ -22,29 +22,137 @@ const bentoColors = [
 ];
 
 function parseSummaryToBlocks(summary: string): { title: string; content: string }[] {
-  // Split by markdown headings (## or **n. Title:**)
   const blocks: { title: string; content: string }[] = [];
-  const regex = /(?:^|\n)(?:##?\s*([\w\d .&-]+)|\*\*(\d+\. [^*]+)\*\*):?\s*/g;
-  let match: RegExpExecArray | null;
-  let lastTitle = "";
-  let lastPos = 0;
-  while ((match = regex.exec(summary))) {
-    if (lastTitle) {
-      blocks.push({
-        title: lastTitle.trim(),
-        content: summary.slice(lastPos, match.index).trim(),
-      });
-    }
-    lastTitle = (match[1] || match[2] || "Untitled").replace(/[:*]/g, "").trim();
-    lastPos = regex.lastIndex;
-  }
-  if (lastTitle) {
-    blocks.push({
-      title: lastTitle.trim(),
-      content: summary.slice(lastPos).trim(),
+  
+  // First, clean up the summary and handle different formats
+  let content = summary.trim();
+  
+  // Remove main title if it starts with #
+  content = content.replace(/^#\s+[^\n]+\n/, '');
+  
+  // Try different parsing approaches in order of preference
+  
+  // 1. Parse ## markdown headings
+  const markdownSections = content.split(/\n##\s+/).filter(s => s.trim());
+  if (markdownSections.length > 1) {
+    markdownSections.forEach((section, index) => {
+      const lines = section.split('\n');
+      const title = lines[0].trim();
+      const sectionContent = lines.slice(1).join('\n').trim();
+      
+      if (title && sectionContent) {
+        blocks.push({ title, content: sectionContent });
+      }
     });
   }
-  return blocks.length ? blocks : [{ title: "Summary", content: summary }];
+  
+  // 2. If no markdown sections, try **bold titles**
+  if (blocks.length === 0) {
+    // Split by **Title** pattern but keep the titles
+    const parts = content.split(/(\*\*[^*]+\*\*)/).filter(s => s.trim());
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      
+      if (part.startsWith('**') && part.endsWith('**')) {
+        // This is a title
+        const title = part.replace(/\*\*/g, '').trim();
+        const nextPart = parts[i + 1];
+        
+        if (nextPart && nextPart.trim()) {
+          blocks.push({
+            title: title,
+            content: nextPart.trim()
+          });
+        }
+      }
+    }
+  }
+  
+  // 3. If still no blocks, try to detect common business plan section titles
+  if (blocks.length === 0) {
+    const commonTitles = [
+      'Business Idea',
+      'Business Overview', 
+      'Executive Summary',
+      'Market Analysis',
+      'Business Model',
+      'Revenue Model',
+      'Strengths & Opportunities',
+      'Strengths and Opportunities',
+      'Challenges & Risks',
+      'Challenges and Risks',
+      'Strategic Recommendations',
+      'Financial Outlook',
+      'Financial Analysis',
+      'Detailed Analysis',
+      'Implementation Plan',
+      'Marketing Strategy',
+      'Target Market',
+      'Competitive Analysis'
+    ];
+    
+    // Find all title positions
+    const titleMatches: { title: string; index: number; matchLength: number }[] = [];
+    commonTitles.forEach(title => {
+      const regex = new RegExp(`(^|\\n)\\s*${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:?\\s*\\n`, 'gi');
+      let match;
+      while ((match = regex.exec(content)) !== null) {
+        titleMatches.push({
+          title: title,
+          index: match.index + match[1].length,
+          matchLength: match[0].length - match[1].length
+        });
+      }
+    });
+    
+    // Sort by position and extract content
+    titleMatches.sort((a, b) => a.index - b.index);
+    
+    for (let i = 0; i < titleMatches.length; i++) {
+      const current = titleMatches[i];
+      const next = titleMatches[i + 1];
+      
+      const startIndex = current.index + current.matchLength;
+      const endIndex = next ? next.index : content.length;
+      
+      const sectionContent = content.slice(startIndex, endIndex).trim();
+      
+      if (sectionContent && sectionContent.length > 10) {
+        blocks.push({
+          title: current.title,
+          content: sectionContent
+        });
+      }
+    }
+  }
+  
+  // 4. Final fallback: split by double line breaks and try to identify sections
+  if (blocks.length === 0) {
+    const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim());
+    
+    for (const paragraph of paragraphs) {
+      const lines = paragraph.split('\n');
+      const firstLine = lines[0].trim();
+      
+      // Check if first line looks like a title (short, no period at end, etc.)
+      if (firstLine.length < 50 && !firstLine.endsWith('.') && lines.length > 1) {
+        const title = firstLine.replace(/^[\*\#\-\s]+/, '').replace(/[\*\#\-\s]+$/, '');
+        const content = lines.slice(1).join('\n').trim();
+        
+        if (title && content && content.length > 20) {
+          blocks.push({ title, content });
+        }
+      }
+    }
+  }
+  
+  // 5. Ultimate fallback: return the whole content as one block
+  if (blocks.length === 0) {
+    return [{ title: "Business Plan Summary", content: summary }];
+  }
+  
+  return blocks;
 }
 
 export default function IdeationPage() {
@@ -91,15 +199,33 @@ export default function IdeationPage() {
   }, [savedBusinessIdea, router]);
 
   const blocks = useMemo(() => (savedSummary ? parseSummaryToBlocks(savedSummary) : []), [savedSummary]);
-  // Main title extraction: always use the first block's title, but show all blocks as cards
-  let mainTitle = blocks.length > 0 ? blocks[0].title : "Business Analysis";
-  let contentBlocks = blocks.length > 1 ? blocks.slice(1) : blocks;
+  
+  // Filter out unwanted titles and show remaining blocks as cards
+  const contentBlocks = blocks.filter(block => 
+    block.title !== "Business Summary: Pet ecommerce Platform" && 
+    block.title !== "Business Overview"
+  );
 
-  // Dynamic grid layout: alternate some cards to span cols/rows for bento effect
-  function getCardGridClass(i: number) {
-    if (i % 5 === 0) return "md:col-span-2 lg:row-span-2";
-    if (i % 5 === 1) return "lg:col-span-1 lg:row-span-2";
-    return "";
+  // Enhanced grid layout: create more interesting bento patterns based on content
+  function getCardGridClass(i: number, totalCards: number) {
+    // Adjust layout based on total number of cards
+    if (totalCards <= 3) {
+      // For 3 or fewer cards, make them larger
+      return i === 0 ? "md:col-span-2" : "md:col-span-1";
+    } else if (totalCards <= 6) {
+      // For 4-6 cards, create varied layout
+      if (i === 0) return "md:col-span-2"; // First card spans 2 columns
+      if (i === totalCards - 1 && totalCards % 2 === 0) return "md:col-span-2"; // Last card spans 2 if even total
+      return "md:col-span-1";
+    } else {
+      // For many cards, create complex bento pattern
+      if (i === 0) return "md:col-span-2 lg:col-span-2"; // First card spans 2 columns
+      if (i === 1 || i === 2) return "md:col-span-1"; // Second and third normal size
+      if (i === 3) return "md:col-span-2 lg:col-span-1"; // Fourth card different size
+      if (i % 6 === 4) return "lg:col-span-2"; // Every 5th card spans 2 columns
+      if (i % 6 === 5) return "lg:row-span-2"; // Every 6th card spans 2 rows
+      return "";
+    }
   }
 
   return (
@@ -111,28 +237,26 @@ export default function IdeationPage() {
           transition={{ duration: 0.6, delay: 0.15 }}
           className="w-full max-w-7xl"
         >
-          {mainTitle && (
-            <h1 className="text-2xl font-bold text-center mb-6 text-foreground">
-              {mainTitle}
-            </h1>
-          )}
+          <h1 className="text-2xl font-bold text-center mb-6 text-foreground">
+            Pet ecommerce Platform
+          </h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-min gap-6">
             {contentBlocks.map((block, i) => (
               <Card
                 key={i}
                 className={clsx(
-                  "rounded-xl shadow-sm flex flex-col min-h-[120px]",
+                  "rounded-xl shadow-sm flex flex-col min-h-[200px] border border-border/50",
                   bentoColors[i % bentoColors.length],
-                  getCardGridClass(i)
+                  getCardGridClass(i, contentBlocks.length)
                 )}
-                style={{ minHeight: '120px', height: 'auto' }}
+                style={{ minHeight: '200px', height: 'auto' }}
               >
-                <CardHeader>
-                  <CardTitle className="text-base font-semibold mb-1 text-foreground">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-bold mb-2 text-foreground">
                     {block.title}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="prose prose-neutral dark:prose-invert max-w-none text-base text-foreground [&>p]:mb-4">
+                <CardContent className="prose prose-sm prose-neutral dark:prose-invert max-w-none text-foreground [&>p]:mb-3 [&>ul]:mb-3 [&>ol]:mb-3 [&>h3]:text-base [&>h3]:font-semibold [&>h3]:mb-2 [&>h3]:text-foreground">
                   <ReactMarkdown>{block.content}</ReactMarkdown>
                 </CardContent>
               </Card>
