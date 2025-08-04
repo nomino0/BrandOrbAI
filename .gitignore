@@ -1,0 +1,15 @@
+# VS Code
+/.vscode
+.history/
+*.code-workspace
+.ionide/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Dependencies and build outputs
+node_modules/
+dist/
+build/
+*.log

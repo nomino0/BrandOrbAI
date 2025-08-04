@@ -1,0 +1,269 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+    
+    /* High contrast color variables */
+    --surface: 0 0% 100%;
+    --surface-foreground: 0 0% 0%;
+    --surface-muted: 210 40% 96%;
+    --surface-hover: 210 40% 93%;
+    --surface-accent: 221.2 83.2% 53.3%;
+    
+    /* Gradient colors */
+    --gradient-from: 221.2 83.2% 53.3%;
+    --gradient-to: 262.1 83.3% 57.8%;
+    
+    /* Chart colors */
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217.2 91.2% 59.8%;
+    
+    /* High contrast color variables for dark mode */
+    --surface: 222.2 84% 4.9%;
+    --surface-foreground: 210 40% 98%;
+    --surface-muted: 217.2 32.6% 17.5%;
+    --surface-hover: 217.2 32.6% 20%;
+    --surface-accent: 217.2 91.2% 59.8%;
+    
+    /* Gradient colors for dark mode */
+    --gradient-from: 217.2 91.2% 59.8%;
+    --gradient-to: 262.1 83.3% 67.8%;
+    
+    /* Chart colors for dark mode */
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+    transition: border-color 0.3s ease;
+  }
+  
+  body {
+    background-color: hsl(var(--background)) !important;
+    color: hsl(var(--foreground));
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Enhanced theme transition animations */
+  html[data-theme-loading="true"] * {
+    transition: none !important;
+  }
+
+  /* Smooth transitions for theme-aware elements */
+  .bg-surface,
+  .bg-surface-muted,
+  .bg-surface-hover,
+  .text-surface,
+  .text-surface-muted,
+  .text-surface-accent,
+  .border-surface,
+  .bg-primary,
+  .text-primary,
+  .border-primary,
+  .bg-muted {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  }
+}
+
+/* Theme-aware utility classes */
+@layer utilities {
+  .bg-surface {
+    background-color: hsl(var(--surface));
+  }
+  
+  .bg-surface-muted {
+    background-color: hsl(var(--surface-muted));
+  }
+  
+  .bg-surface-hover {
+    background-color: hsl(var(--surface-hover));
+  }
+  
+  .text-surface {
+    color: hsl(var(--surface-foreground));
+  }
+  
+  .text-surface-muted {
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .text-surface-accent {
+    color: hsl(var(--surface-accent));
+  }
+  
+  .border-surface {
+    border-color: hsl(var(--border));
+  }
+  
+  .border-surface-accent {
+    border-color: hsl(var(--surface-accent));
+  }
+  
+  .bg-primary {
+    background-color: hsl(var(--primary));
+  }
+  
+  .text-primary {
+    color: hsl(var(--primary));
+  }
+  
+  .border-primary {
+    border-color: hsl(var(--primary));
+  }
+  
+  .bg-muted {
+    background-color: hsl(var(--muted));
+  }
+  
+  .text-foreground {
+    color: hsl(var(--foreground)) !important;
+  }
+  
+  .gradient-text {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gradient-from)) 0%,
+      hsl(var(--gradient-to)) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Custom shadow utilities - reduced intensity */
+  .shadow-subtle {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  
+  .shadow-soft {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  }
+  
+  .shadow-gentle {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  
+  .shadow-card {
+    box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.08), 0 1px 3px -1px rgb(0 0 0 / 0.05);
+  }
+  
+  /* Dark mode shadow adjustments */
+  .dark .shadow-subtle {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  }
+  
+  .dark .shadow-soft {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  }
+  
+  .dark .shadow-gentle {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  }
+  
+  .dark .shadow-card {
+    box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.4), 0 1px 3px -1px rgb(0 0 0 / 0.25);
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --foreground: 0 0% 0%;
+    --background: 0 0% 100%;
+    --muted-foreground: 0 0% 20%;
+  }
+  
+  .dark {
+    --foreground: 0 0% 100%;
+    --background: 0 0% 0%;
+    --muted-foreground: 0 0% 80%;
+  }
+}
+
+/* Remove focus outlines for all elements */
+*:focus,
+*:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+}
+
+/* Custom focus styles for accessibility (optional) */
+button:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none !important;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
