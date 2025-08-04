@@ -76,7 +76,7 @@ Your response should be:
 - Natural and conversational
 - Informed by your actual circumstances and resources
 - Practical and actionable
-- Brief but complete
+- Brief 5 lines max
 
 Example context: If your keywords include ["400dt","personal saving","100dt a month"].
 a good response would be: i currently have 400dt in my personal saving and i am recieving 100dt a month to support the project.

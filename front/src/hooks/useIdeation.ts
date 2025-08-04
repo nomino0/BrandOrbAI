@@ -297,7 +297,9 @@ export function useIdeation({
               ...q, 
               suggestedAnswer: response.answer,
               answer: response.answer, // Auto-apply the suggested answer
-              isLoadingSuggestion: false 
+              isLoadingSuggestion: false,
+              isSatisfactory: undefined, // Reset satisfaction status for new AI-generated answer
+              satisfactionReason: undefined // Clear any previous feedback
             }
           : q
       ));

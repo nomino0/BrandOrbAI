@@ -236,8 +236,8 @@ export default function OnboardingPage() {
   // When questions change, open the first unanswered question by default
   useEffect(() => {
     if (questions.length > 0) {
-      // Find first unanswered question or unsatisfactory question
-      const firstUnanswered = questions.find(q => !q.answer || q.isSatisfactory === false)?.index;
+      // Find first unanswered question
+      const firstUnanswered = questions.find(q => !q.answer)?.index;
       if (typeof firstUnanswered === 'number') {
         setOpenQuestions([firstUnanswered]);
       }
@@ -265,20 +265,15 @@ export default function OnboardingPage() {
         return newOpen;
       });
     }
-    // If not satisfactory, keep the question open for re-answering
-    // The feedback will be shown automatically via the question.isSatisfactory check
+    // If not satisfactory, keep the question open for re-editing
+    // Don't regenerate the question, just show feedback and allow editing
   };
 
   // Accordion open/close handler
   const handleAccordionChange = (values: string[]) => {
-    // Allow opening unanswered, validated, or unsatisfactory questions
-    const allowed = questions
-      .filter(q => !q.answer || validatedQuestions.includes(q.index) || q.isSatisfactory === false)
-      .map(q => `question-${q.index}`);
+    // Allow opening any question - remove the filtering that was preventing validated questions from opening
     setOpenQuestions(
-      values
-        .filter(val => allowed.includes(val))
-        .map(val => parseInt(val.replace('question-', '')))
+      values.map(val => parseInt(val.replace('question-', '')))
     );
   };
 
@@ -713,9 +708,8 @@ export default function OnboardingPage() {
                     >
                       <AccordionTrigger
                         className="px-6 py-4 hover:bg-surface-hover transition-all duration-200"
-                        // Allow toggling for answered questions
+                        // All questions can be opened - for review or editing
                         disabled={false}
-                        style={{}}
                       >
                         <div className="flex flex-col gap-3 w-full text-left">
                           {/* Question Counter on top */}
@@ -724,14 +718,14 @@ export default function OnboardingPage() {
                           </div>
                           {/* Status Badges */}
                           <div className="flex items-center gap-2 justify-start">
-                            {unansweredQuestions.includes(question.index) && (
+                            {!question.answer && (
                               <motion.div
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
                                 transition={{ duration: 0.3 }}
                               >
-                                <Badge variant="destructive" className="bg-red-50 text-red-800 border-red-200">
-                                  Required
+                                <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200">
+                                  Awaiting Answer
                                 </Badge>
                               </motion.div>
                             )}
@@ -742,18 +736,40 @@ export default function OnboardingPage() {
                                 transition={{ duration: 0.3 }}
                               >
                                 <Badge variant="secondary" className="bg-green-50 text-green-600 border-green-200">
-                                  Answered ✓
+                                  ✓ Validated
                                 </Badge>
                               </motion.div>
                             )}
-                            {question.answer && question.isSatisfactory === false && question.satisfactionReason && (
+                            {question.answer && question.isSatisfactory === false && (
                               <motion.div
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
                                 transition={{ duration: 0.3 }}
                               >
                                 <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">
-                                  Needs More Detail
+                                  ⚠ Needs Improvement
+                                </Badge>
+                              </motion.div>
+                            )}
+                            {question.answer && question.isSatisfactory === undefined && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ duration: 0.3 }}
+                              >
+                                <Badge variant="outline" className="bg-yellow-50 text-yellow-600 border-yellow-200">
+                                  ⏳ Pending Validation
+                                </Badge>
+                              </motion.div>
+                            )}
+                            {unansweredQuestions.includes(question.index) && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ duration: 0.3 }}
+                              >
+                                <Badge variant="destructive" className="bg-red-50 text-red-800 border-red-200">
+                                  Required
                                 </Badge>
                               </motion.div>
                             )}
@@ -769,7 +785,8 @@ export default function OnboardingPage() {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.3 }}
                         >
-                          {isValidated && question.isSatisfactory === true ? (
+                          {/* Show read-only view if question has a satisfactory answer */}
+                          {question.answer && question.isSatisfactory === true ? (
                             <div className="rounded-lg p-4 bg-surface-muted/30">
                               <div className="mb-2 text-base font-semibold text-surface">Your Answer:</div>
                               <div className="whitespace-pre-line text-base text-surface-muted">{question.answer}</div>
@@ -787,29 +804,35 @@ export default function OnboardingPage() {
                                   satisfactionReason: question.satisfactionReason
                                 })}
                               </div>
-                              {question.isSatisfactory === false && question.satisfactionReason && (
+                              
+                              {/* Show feedback if answer is not satisfactory */}
+                              {question.answer && question.isSatisfactory === false && question.satisfactionReason && (
                                 <motion.div
                                   initial={{ opacity: 0, y: 10 }}
                                   animate={{ opacity: 1, y: 0 }}
                                   transition={{ duration: 0.3 }}
-                                  className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4 shadow-sm"
+                                  className="bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-300 dark:border-orange-800 rounded-lg p-4 shadow-sm"
                                 >
                                   <div className="flex items-start gap-3">
                                     <div className="flex-shrink-0">
-                                      <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
+                                      <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5" />
                                     </div>
                                     <div className="flex-1">
-                                      <p className="text-sm font-semibold text-orange-800 mb-1">
-                                        AI Feedback - Please provide more details:
+                                      <p className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">
+                                        AI Feedback - Please improve your answer:
                                       </p>
-                                      <p className="text-sm text-orange-700 leading-relaxed">
+                                      <p className="text-sm text-orange-700 dark:text-orange-200 leading-relaxed mb-3">
                                         {question.satisfactionReason}
+                                      </p>
+                                      <p className="text-xs text-orange-600 dark:text-orange-400 italic">
+                                        Edit your answer above and submit again for validation.
                                       </p>
                                     </div>
                                   </div>
                                 </motion.div>
                               )}
-                              {/* Navigation Buttons - simplified, no unnecessary Next Question button */}
+                              
+                              {/* Submit/Validate button */}
                               <div className="flex items-center justify-end pt-4 border-t border-surface">
                                 <div className="flex gap-3">
                                   <Button
@@ -827,10 +850,15 @@ export default function OnboardingPage() {
                                         </motion.div>
                                         <span className="text-white">Validating...</span>
                                       </>
+                                    ) : question.answer && question.isSatisfactory === false ? (
+                                      <>
+                                        <Send className="h-4 w-4 text-white" />
+                                        <span className="text-white">Resubmit Answer</span>
+                                      </>
                                     ) : (
                                       <>
                                         <Send className="h-4 w-4 text-white" />
-                                        <span className="text-white">Validate & Continue</span>
+                                        <span className="text-white">Submit Answer</span>
                                       </>
                                     )}
                                   </Button>

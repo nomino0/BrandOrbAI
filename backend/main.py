@@ -368,12 +368,12 @@ async def respond_to_question(request: AnswerRequest):
         "reason": state.questions[request.question_index].satisfaction_reason,
     }
     
-    # Generate next question if we haven't reached the limit
+    # Generate next question ONLY if current answer is satisfactory and we haven't reached the limit
     new_question = None
     has_more = False
     
-    if len(state.questions) < 5:
-        logger.info("Generating next question...")
+    if state.questions[request.question_index].is_satisfactory and len(state.questions) < 5:
+        logger.info("Answer is satisfactory, generating next question...")
         state = generate_next_question(state)
         logger.info(f"State after generating next question: {state}")
         
@@ -381,6 +381,8 @@ async def respond_to_question(request: AnswerRequest):
         if len(state.questions) > request.question_index + 1:
             new_question = state.questions[-1].question
             has_more = True
+    elif not state.questions[request.question_index].is_satisfactory:
+        logger.info("Answer is not satisfactory, allowing user to edit their response")
     else:
         logger.info("Maximum number of questions (5) reached")
     
