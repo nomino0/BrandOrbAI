@@ -140,17 +140,34 @@ def generate_next_question(state: State) -> State:
             business_idea=state.description, qa_history=qa_history
         )
 
-        # Generate structured response
-        structured_llm = model.with_structured_output(QuestionOutput)
-        response = structured_llm.invoke(prompt)
+        try:
+            # Try structured output first
+            structured_llm = model.with_structured_output(QuestionOutput)
+            response = structured_llm.invoke(prompt)
 
-        # Check if no more questions are needed
-        if isinstance(response.final_output, NoMoreQuestions):
-            return state  # No new question added
+            # Check if no more questions are needed
+            if isinstance(response.final_output, NoMoreQuestions):
+                return state  # No new question added
 
-        # Add new question to state
-        new_question = QuestionEntry(question=response.final_output.question)
-        state.questions.append(new_question)
+            # Add new question to state
+            new_question = QuestionEntry(question=response.final_output.question)
+            state.questions.append(new_question)
+
+        except Exception as structured_error:
+            print(f"Structured output failed for question generation: {structured_error}, falling back to regular response")
+            # Fallback to regular response if structured output fails
+            response = model.invoke(prompt)
+            question_text = response.content if hasattr(response, 'content') else str(response)
+            
+            # Clean up the response to extract just the question
+            if "NO_MORE_QUESTIONS_NEEDED" in question_text.upper():
+                return state  # No new question added
+            
+            # Extract the question (remove any prefixes or formatting)
+            question_text = question_text.strip()
+            if question_text and not question_text.startswith("I"):
+                new_question = QuestionEntry(question=question_text)
+                state.questions.append(new_question)
 
         return state
 
@@ -179,16 +196,29 @@ def check_if_satisfactory(state: State, question_index: int) -> State:
             response=target_question.response,
         )
 
-        # Simple satisfaction check prompt
-        structured_llm = model.with_structured_output(SatisfactionCheck)
-        response = structured_llm.invoke(check_prompt)
+        try:
+            # Try structured output first
+            structured_llm = model.with_structured_output(SatisfactionCheck)
+            response = structured_llm.invoke(check_prompt)
+            is_satisfactory = response.is_satisfactory
+            reason = response.reason
+        except Exception as structured_error:
+            print(f"Structured output failed for satisfaction check: {structured_error}, falling back to regular response")
+            # Fallback to regular response if structured output fails
+            response = model.invoke(check_prompt)
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            
+            # Simple heuristic: if response contains positive words, consider it satisfactory
+            response_lower = response_text.lower()
+            is_satisfactory = any(word in response_lower for word in ['satisfactory', 'adequate', 'yes', 'good', 'sufficient'])
+            reason = response_text.strip()
 
         # Store satisfaction info in the question entry
-        state.questions[question_index].is_satisfactory = response.is_satisfactory
-        state.questions[question_index].satisfaction_reason = response.reason
+        state.questions[question_index].is_satisfactory = is_satisfactory
+        state.questions[question_index].satisfaction_reason = reason
 
         print(
-            f"Satisfaction check for question {question_index}: {response.is_satisfactory} - {response.reason}"
+            f"Satisfaction check for question {question_index}: {is_satisfactory} - {reason}"
         )
 
         return state
@@ -226,12 +256,38 @@ def generate_keywords(state: State, question_index: int) -> State:
             qa_history=qa_history,
         )
 
-        # Generate structured keywords response
-        structured_llm = model.with_structured_output(Keywords)
-        response = structured_llm.invoke(prompt)
+        try:
+            # Try structured output first
+            structured_llm = model.with_structured_output(Keywords)
+            response = structured_llm.invoke(prompt)
+            keywords = response.keywords
+        except Exception as structured_error:
+            print(f"Structured output failed for keywords: {structured_error}, falling back to regular response")
+            # Fallback to regular response if structured output fails
+            response = model.invoke(prompt)
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            
+            # Extract keywords from response text (look for JSON array or comma-separated values)
+            import re
+            import json
+            
+            # Try to find JSON array in response
+            json_match = re.search(r'\[.*?\]', response_text)
+            if json_match:
+                try:
+                    keywords = json.loads(json_match.group())
+                except:
+                    # Fallback: split by commas and clean up
+                    keywords = [k.strip().strip('"\'') for k in response_text.split(',')]
+            else:
+                # Fallback: split by commas and clean up
+                keywords = [k.strip().strip('"\'') for k in response_text.split(',')]
+            
+            # Limit to 6 keywords and filter out empty ones
+            keywords = [k for k in keywords if k and len(k) > 2][:6]
 
         # Update the target question with keywords
-        state.questions[question_index].keywords = response.keywords
+        state.questions[question_index].keywords = keywords
 
         return state
 
@@ -264,12 +320,19 @@ def generate_answer(
             selected_keywords=keywords_str,
         )
 
-        # Generate structured answer response
-        structured_llm = model.with_structured_output(Answer)
-        response = structured_llm.invoke(prompt)
+        try:
+            # Try structured output first
+            structured_llm = model.with_structured_output(Answer)
+            response = structured_llm.invoke(prompt)
+            answer_text = response.answer
+        except Exception as structured_error:
+            print(f"Structured output failed: {structured_error}, falling back to regular response")
+            # Fallback to regular response if structured output fails
+            response = model.invoke(prompt)
+            answer_text = response.content if hasattr(response, 'content') else str(response)
 
         # Update the target question with the response
-        state.questions[question_index].response = response.answer
+        state.questions[question_index].response = answer_text
 
         return state
 
@@ -300,12 +363,19 @@ def generate_summary(state: State) -> State:
             qa_history=qa_history,
         )
 
-        # Generate structured summary response
-        structured_llm = model.with_structured_output(Summary)
-        response = structured_llm.invoke(prompt)
+        try:
+            # Try structured output first
+            structured_llm = model.with_structured_output(Summary)
+            response = structured_llm.invoke(prompt)
+            summary_text = response.summary
+        except Exception as structured_error:
+            print(f"Structured output failed for summary: {structured_error}, falling back to regular response")
+            # Fallback to regular response if structured output fails
+            response = model.invoke(prompt)
+            summary_text = response.content if hasattr(response, 'content') else str(response)
 
         # Update the state with the summary
-        state.summary = response.summary
+        state.summary = summary_text
 
         return state
 
