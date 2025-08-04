@@ -17,10 +17,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         "--sidebar-width": "calc(var(--spacing) * 72)",
         "--header-height": "calc(var(--spacing) * 12)",
       } as React.CSSProperties}
-      className="bg-gray-100 min-h-screen"
+      className="bg-surface-muted dark:bg-surface min-h-screen"
     >
-      <AppSidebar variant="inset" className="bg-gray-100" />
-      <SidebarInset className="bg-white"> {/* <-- even softer gray */}
+      <AppSidebar variant="inset" className="bg-surface-muted dark:bg-surface" />
+      <SidebarInset className="bg-surface dark:bg-surface">
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
