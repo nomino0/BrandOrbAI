@@ -120,11 +120,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
+      <SidebarHeader className="border-b border-sidebar-border/50">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard" className="flex items-center space-x-2">
+            <SidebarMenuButton size="lg" asChild className="h-16 px-4 hover:bg-sidebar-accent/30 transition-colors duration-200">
+              <Link href="/dashboard" className="flex items-center space-x-3">
                 <div className="relative h-9 w-auto">
                   {!mounted ? (
                     // Placeholder during hydration
@@ -145,10 +145,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-2 py-4">
         <NavMain items={data.navMain} />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border/50 p-2">
         <NavUser user={data.user} />
       </SidebarFooter>
     </Sidebar>

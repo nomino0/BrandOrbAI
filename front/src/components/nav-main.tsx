@@ -59,7 +59,7 @@ export function NavMain({
   return (
     <SidebarGroup>
       <SidebarGroupContent>
-        <SidebarMenu>
+        <SidebarMenu className="gap-2">
           {items.map((item) => (
             <Collapsible
               key={item.title}
@@ -70,19 +70,23 @@ export function NavMain({
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton 
                     tooltip={item.title}
-                    className={`w-full ${item.isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''}`}
+                    className={`w-full h-12 px-3 rounded-lg transition-all duration-200 hover:bg-sidebar-accent/50 ${
+                      item.isActive 
+                        ? 'bg-white dark:bg-white text-gray-900 shadow-sm border border-sidebar-border' 
+                        : ''
+                    }`}
                     asChild
                   >
-                    <a href={item.url} className="flex items-center gap-2 w-full">
-                      <div className="flex items-center gap-2 flex-1">
-                        {item.icon && <item.icon className="h-4 w-4" />}
-                        <span className="truncate">{item.title}</span>
+                    <a href={item.url} className="flex items-center gap-3 w-full">
+                      <div className="flex items-center gap-3 flex-1">
+                        {item.icon && <item.icon className="h-5 w-5 shrink-0" />}
+                        <span className="truncate font-medium">{item.title}</span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2 shrink-0">
                         {getStatusIcon(item.status || "")}
                         {item.items && item.items.length > 0 && (
                           <IconChevronRight 
-                            className={`h-3 w-3 transition-transform ${
+                            className={`h-4 w-4 transition-transform duration-200 ${
                               openItems[item.title] ? 'rotate-90' : ''
                             }`} 
                           />
@@ -94,14 +98,20 @@ export function NavMain({
                 
                 {item.items && item.items.length > 0 && (
                   <CollapsibleContent>
-                    <SidebarMenuSub>
+                    <SidebarMenuSub className="ml-6 mt-2 border-l border-sidebar-border/30">
                       {item.items.map((subItem, index) => (
-                        <SidebarMenuSubItem key={subItem.title}>
+                        <SidebarMenuSubItem key={subItem.title} className="pl-4 py-1">
                           <SidebarMenuSubButton asChild>
-                            <a href={subItem.url} className="flex items-center gap-2 w-full">
-                              <span className="text-xs text-muted-foreground">{index + 1}.</span>
-                              <span className="truncate flex-1">{subItem.title}</span>
-                              {getStatusIcon(subItem.status || "")}
+                            <a href={subItem.url} className="flex items-center gap-3 w-full h-10 px-3 rounded-md transition-all duration-200 hover:bg-sidebar-accent/30 group">
+                              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                                {index + 1}.
+                              </span>
+                              <span className="truncate flex-1 text-sm group-hover:text-foreground transition-colors">
+                                {subItem.title}
+                              </span>
+                              <div className="shrink-0">
+                                {getStatusIcon(subItem.status || "")}
+                              </div>
                             </a>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
