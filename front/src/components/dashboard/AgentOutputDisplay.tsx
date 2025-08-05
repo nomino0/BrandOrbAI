@@ -4,7 +4,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { parseFinancialAssessment, parseMarketAnalysis } from '@/services/agents';
+import { parseFinancialAssessment, parseMarketAnalysis, parseSWOTOutput } from '@/services/agents';
 
 // Dynamically import react-markdown to avoid SSR issues
 const ReactMarkdown = dynamic(() => import('react-markdown'), { ssr: false });
@@ -12,7 +12,7 @@ const ReactMarkdown = dynamic(() => import('react-markdown'), { ssr: false });
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 interface AgentOutputDisplayProps {
-  agentType: 'financial_assessment' | 'legal_analysis' | 'market_analysis_competitors' | 'opportunities';
+  agentType: 'financial_assessment' | 'legal_analysis' | 'market_analysis_competitors' | 'opportunities' | 'swot_analysis';
   output: string;
   title: string;
 }
@@ -176,6 +176,98 @@ export function AgentOutputDisplay({ agentType, output, title }: AgentOutputDisp
     </Card>
   );
 
+  const renderSWOTAnalysis = () => {
+    const parsed = parseSWOTOutput(output);
+    
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>{title}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Strengths */}
+              {parsed.strengths && (
+                <Card className="border-green-200 dark:border-green-800">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      Strengths
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
+                      <ReactMarkdown>{parsed.strengths}</ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Weaknesses */}
+              {parsed.weaknesses && (
+                <Card className="border-red-200 dark:border-red-800">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-red-700 dark:text-red-300 flex items-center gap-2">
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      Weaknesses
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
+                      <ReactMarkdown>{parsed.weaknesses}</ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Opportunities */}
+              {parsed.opportunities && (
+                <Card className="border-blue-200 dark:border-blue-800">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                      Opportunities
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
+                      <ReactMarkdown>{parsed.opportunities}</ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Threats */}
+              {parsed.threats && (
+                <Card className="border-orange-200 dark:border-orange-800">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-orange-700 dark:text-orange-300 flex items-center gap-2">
+                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                      Threats
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
+                      <ReactMarkdown>{parsed.threats}</ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Full Analysis Fallback */}
+            {!parsed.strengths && !parsed.weaknesses && !parsed.opportunities && !parsed.threats && (
+              <div className="prose prose-neutral dark:prose-invert max-w-none">
+                <ReactMarkdown>{parsed.fullAnalysis}</ReactMarkdown>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   switch (agentType) {
     case 'financial_assessment':
       return renderFinancialAssessment();
@@ -185,6 +277,8 @@ export function AgentOutputDisplay({ agentType, output, title }: AgentOutputDisp
       return renderLegalAnalysis();
     case 'opportunities':
       return renderOpportunities();
+    case 'swot_analysis':
+      return renderSWOTAnalysis();
     default:
       return (
         <Card>

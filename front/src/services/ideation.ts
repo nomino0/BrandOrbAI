@@ -161,6 +161,13 @@ export class IdeationAgentService {
   }
 
   /**
+   * Get summary with embedded image metadata for a session
+   */
+  static async getSummaryWithImage(sessionId: string): Promise<SummaryResponse> {
+    return apiRequest<SummaryResponse>(`/summary-with-image/${sessionId}`, 'POST');
+  }
+
+  /**
    * Reset questions after a specific index
    */
   static async resetSession(request: ResetRequest): Promise<SessionResponse> {

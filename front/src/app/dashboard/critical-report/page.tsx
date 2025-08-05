@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useStepProgress } from "@/hooks/useStepProgress";
-import { getAgentOutput } from "@/services/agents";
+import { getAgentOutput, getSWOTOutput } from "@/services/agents";
 import { AgentOutputDisplay } from "@/components/dashboard/AgentOutputDisplay";
 import { useState, useEffect } from "react";
 
@@ -60,6 +60,15 @@ export default function CriticalReportPage() {
           console.error(`Failed to fetch ${agent}:`, error);
           outputs[agent] = '';
         }
+      }
+
+      // Fetch SWOT analysis separately using dedicated endpoint
+      try {
+        const swotResult = await getSWOTOutput();
+        outputs['swot_analysis'] = swotResult.content;
+      } catch (error) {
+        console.error('Failed to fetch SWOT analysis:', error);
+        outputs['swot_analysis'] = '';
       }
       
       setAgentOutputs(outputs);

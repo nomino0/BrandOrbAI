@@ -1,0 +1,11 @@
+{
+  "image_url": "https://image.pollinations.ai/prompt/modern-retail-studio-with-wooden-racks-womens-clothing-on-hangers-natural-lighting-soft-shadows-female-model-in-background-trying-on-clothes-minimalistic-color-palette-creamy-textures-professional-pho?width=1344&height=640&model=flux&nologo=true&private=true&seed=671279",
+  "business_idea": "E-commerce platform for selling women's clothing",
+  "generated_at": "2025-08-05T17:27:06.993808",
+  "status": "success",
+  "local_path": "D:\\Tek-UP\\Internship\\Summer2025\\BrandOrbAI\\backend\\agents\\output\\images\\E-commerce_platform_for_selling_womens_clothing_1754411222.jpg",
+  "filename": "E-commerce_platform_for_selling_womens_clothing_1754411222.jpg",
+  "file_size": 151499,
+  "serve_url": "http://localhost:8001/images/E-commerce_platform_for_selling_womens_clothing_1754411222.jpg",
+  "has_base64": true
+}

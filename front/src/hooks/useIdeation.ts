@@ -476,19 +476,30 @@ export function useIdeation({
 
   // Generate summary from the backend
   const generateSummary = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      console.error('No session ID available for summary generation');
+      return;
+    }
 
     try {
       setIsLoadingSummary(true);
       setError(null);
+
+      console.log('Generating summary with image for session:', sessionId);
       
-      const response = await IdeationAgentService.getSummary(sessionId);
+      // Use the new endpoint that includes image generation
+      const response = await IdeationAgentService.getSummaryWithImage(sessionId);
+      
+      console.log('Summary with image response:', response);
+
       setFinalSummary(response.summary);
-      setIsComplete(true);
-      // Save summary to localStorage
       localStorage.setItem('brandorb_summary', response.summary);
-      // Call completion callback
-      onComplete?.(response.summary);
+
+      if (onComplete) {
+        onComplete(response.summary);
+      }
+
+      setIsComplete(true);
     } catch (err) {
       const apiError = err instanceof IdeationAgentApiError 
         ? err 

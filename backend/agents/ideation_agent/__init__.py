@@ -1,1 +1,0 @@
-# Ideation agent package

@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -20,6 +20,8 @@ from agents.legal_agent import LegalAgent
 from agents.marketAnalysis_competitors_Agents import run_market_analysis_competitors
 from agents.opportunities_agent import run_opportunities_agent
 from agents.bmc_agent import extract_bmc_parts, read_multiple_files
+from agents.image_agent import run_image_generation_agent
+from agents.swot_agent import SWOTAgent
 
 # Import ideation agents
 from agents.ideation_structs import State, QuestionEntry
@@ -101,6 +103,7 @@ class MultiAgentState:
         self.partners_suppliers_investors = None
         self.market_analysis = None
         self.competitor_analysis = None 
+        self.background_image = None  # Add image data to state
 
     def to_dict(self):
         return {
@@ -110,6 +113,7 @@ class MultiAgentState:
             "partners_suppliers_investors": self.partners_suppliers_investors,
             "market_analysis": self.market_analysis,
             "competitor_analysis": self.competitor_analysis,
+            "background_image": self.background_image,  # Include image in output
         }
 
 # Ideation models
@@ -157,7 +161,7 @@ class SummaryResponse(BaseModel):
 
 @app.post("/run-all")
 async def run_all_agents(request: RunRequest):
-    """Run all agents for business analysis"""
+    """Run all agents for business analysis including background image generation"""
     run_id = str(uuid.uuid4())
     state = MultiAgentState(request.business_idea)
     
@@ -176,8 +180,44 @@ async def run_all_agents(request: RunRequest):
         # Opportunities
         state.partners_suppliers_investors = run_opportunities_agent(state.business_idea)
         
+        # Generate background image as part of the workflow
+        try:
+            logger.info(f"Generating background image for business idea: {request.business_idea}")
+            
+            # Create a business summary from all agent outputs for image generation
+            summary_parts = []
+            if state.financial_assessment:
+                summary_parts.append("Financial assessment completed")
+            if state.legal_analysis:
+                summary_parts.append("Legal analysis completed")
+            if state.market_analysis:
+                summary_parts.append("Market analysis completed")
+            if state.partners_suppliers_investors:
+                summary_parts.append("Opportunities analysis completed")
+            
+            business_summary = f"Business plan for {request.business_idea}. Analysis includes: {', '.join(summary_parts)}"
+            
+            image_result = run_image_generation_agent(business_summary, request.business_idea)
+            
+            if image_result["status"] == "success":
+                state.background_image = image_result
+                logger.info(f"Successfully generated background image for business: {request.business_idea}")
+            else:
+                logger.warning(f"Image generation failed: {image_result.get('error', 'Unknown error')}")
+                state.background_image = {"status": "error", "error": image_result.get('error', 'Unknown error')}
+                
+        except Exception as image_error:
+            logger.error(f"Error during image generation: {str(image_error)}")
+            state.background_image = {"status": "error", "error": str(image_error)}
+        
         runs[run_id] = state.to_dict()
-        return {"message": "done", "run_id": run_id}
+        
+        # Return the complete state including image data for frontend access
+        return {
+            "message": "done", 
+            "run_id": run_id,
+            "data": state.to_dict()  # Include all state data including background_image
+        }
     
     except Exception as e:
         logger.error(f"Error running agents: {str(e)}")
@@ -268,6 +308,116 @@ def get_bmc_output():
         raise HTTPException(status_code=404, detail="BMC output not found")
     with open(output_path, "r", encoding="utf-8") as f:
         return f.read()
+
+# =============================================================================
+# IMAGE GENERATION ENDPOINTS
+# =============================================================================
+
+class ImageGenerationRequest(BaseModel):
+    business_idea: str
+    business_summary: str
+
+class ImageGenerationResponse(BaseModel):
+    image_url: str
+    business_idea: str
+    generated_at: str
+    status: str
+    base64_data: Optional[str] = None
+    local_path: Optional[str] = None
+    filename: Optional[str] = None
+    file_size: Optional[int] = None
+    serve_url: Optional[str] = None  # Direct URL to serve the image
+
+@app.post("/generate-image", response_model=ImageGenerationResponse)
+async def generate_business_image(request: ImageGenerationRequest):
+    """Generate a background image for business idea using Groq + Pollinations AI"""
+    try:
+        logger.info(f"Generating image for business idea: {request.business_idea}")
+        
+        result = run_image_generation_agent(request.business_summary, request.business_idea)
+        
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=f"Image generation failed: {result.get('error', 'Unknown error')}")
+        
+        return ImageGenerationResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"Image generation endpoint error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
+
+@app.get("/image-output")
+async def get_image_output():
+    """Get the latest generated image information"""
+    output_path = os.path.join(os.path.dirname(__file__), "agents", "output", "image_generation_output.json")
+    
+    if not os.path.exists(output_path):
+        raise HTTPException(status_code=404, detail="No image generation output found")
+    
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            import json
+            content = json.load(f)
+        return content
+    except Exception as e:
+        logger.error(f"Error reading image output: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to read image output")
+
+@app.get("/images/{filename}")
+async def serve_image(filename: str):
+    """Serve generated images directly"""
+    image_path = os.path.join(os.path.dirname(__file__), "agents", "output", "images", filename)
+    
+    if not os.path.exists(image_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    return FileResponse(
+        path=image_path,
+        media_type="image/jpeg",
+        filename=filename
+    )
+
+# =============================================================================
+# SWOT ANALYSIS ENDPOINTS
+# =============================================================================
+
+@app.post("/run-swot")
+async def run_swot_analysis():
+    """Generate SWOT analysis based on existing agent outputs"""
+    try:
+        logger.info("Starting SWOT analysis")
+        
+        # Create SWOT agent instance
+        swot_agent = SWOTAgent()
+        
+        # Generate SWOT analysis
+        result = swot_agent.generate_swot_analysis()
+        
+        if result.get("success", False):
+            logger.info("SWOT analysis completed successfully")
+            return {"message": "SWOT analysis completed", "status": "success"}
+        else:
+            logger.error(f"SWOT analysis failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(status_code=500, detail=f"SWOT analysis failed: {result.get('error', 'Unknown error')}")
+            
+    except Exception as e:
+        logger.error(f"Error in SWOT analysis endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SWOT analysis failed: {str(e)}")
+
+@app.get("/swot-output")
+async def get_swot_output():
+    """Get the latest SWOT analysis output"""
+    output_path = os.path.join(os.path.dirname(__file__), "agents", "output", "swot_output.txt")
+    
+    if not os.path.exists(output_path):
+        raise HTTPException(status_code=404, detail="No SWOT analysis output found")
+    
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"content": content}
+    except Exception as e:
+        logger.error(f"Error reading SWOT output: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to read SWOT output")
 
 # =============================================================================
 # IDEATION ENDPOINTS
@@ -513,6 +663,56 @@ async def get_summary(session_id: str):
     
     return response_data
 
+
+@app.post("/summary-with-image/{session_id}", response_model=SummaryResponse)
+async def get_summary_with_image(session_id: str):
+    """Generate and return a comprehensive summary with embedded image metadata."""
+    logger.info("=== GET SUMMARY WITH IMAGE ===")
+    logger.info(f"Session ID: {session_id}")
+    
+    if session_id not in sessions:
+        logger.error(f"Session not found: {session_id}")
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    state = sessions[session_id]
+    logger.info(f"Current state: {state}")
+    
+    # Check if there are any answered questions
+    answered_questions = [q for q in state.questions if q.response is not None]
+    if not answered_questions:
+        logger.error("No answered questions found for summary generation")
+        raise HTTPException(status_code=400, detail="No answered questions available for summary generation")
+    
+    # Generate image for the business idea
+    logger.info("Generating business image...")
+    try:
+        # Create a simple business summary for image generation
+        business_summary = f"Business plan for {state.description}"
+        for q in answered_questions[:3]:  # Use first 3 answers for context
+            business_summary += f" {q.response[:100]}"  # Truncate for brevity
+        
+        image_result = run_image_generation_agent(business_summary, state.description)
+        logger.info(f"Image generation result: {image_result}")
+        
+        # Generate summary with image metadata included
+        logger.info("Generating summary with image metadata...")
+        state = generate_summary(state, include_image_metadata=True, image_data=image_result)
+        sessions[session_id] = state
+        logger.info(f"Generated enhanced summary with image data")
+        
+    except Exception as e:
+        logger.error(f"Error generating image for summary: {e}")
+        # Fall back to regular summary if image generation fails
+        if not state.summary:
+            state = generate_summary(state)
+            sessions[session_id] = state
+    
+    response_data = SummaryResponse(summary=state.summary or "Summary generation failed")
+    logger.info(f"ENHANCED SUMMARY RESPONSE JSON: {json.dumps(response_data.dict(), indent=2)}")
+    logger.info("=== END GET SUMMARY WITH IMAGE ===\n")
+    
+    return response_data
+
 @app.post("/reset", response_model=SessionResponse)
 async def reset_session(request: ResetRequest):
     """Reset questions after a specific index."""
@@ -627,6 +827,8 @@ async def root():
         "endpoints": {
             "multi_agent": "/run-all, /agent-output",
             "bmc": "/bmc/run, /bmc/output",
+            "image_generation": "/generate-image, /image-output",
+            "swot_analysis": "/run-swot, /swot-output",
             "ideation": {
                 "POST /init": "Initialize a new session",
                 "POST /respond": "Submit response to any question by index and get next question",

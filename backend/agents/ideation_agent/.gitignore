@@ -1,7 +1,0 @@
-.venv
-.direnv
-**/__pycache__/
-**/agent.egg-info/
-api.log
-
-.env

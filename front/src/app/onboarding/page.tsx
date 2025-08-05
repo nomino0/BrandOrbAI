@@ -821,7 +821,11 @@ export default function OnboardingPage() {
                                       <p className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">
                                         AI Feedback - Please improve your answer:
                                       </p>
-                                      <p className="text-sm text-orange-700 dark:text-orange-200 leading-relaxed mb-3">
+                                      <p className={`text-sm leading-relaxed mb-3 ${
+                                        question.satisfactionReason?.includes('The answer does not directly address the question about the go-to-market strategy and pricing model')
+                                          ? 'text-orange-300 dark:text-orange-800' 
+                                          : 'text-orange-700 dark:text-orange-200'
+                                      }`}>
                                         {question.satisfactionReason}
                                       </p>
                                       <p className="text-xs text-orange-600 dark:text-orange-400 italic">

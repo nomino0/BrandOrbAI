@@ -1,28 +1,28 @@
 [
   {
-    "name": "Pet E-Commerce Platform Solutions Inc.",
-    "description": "Leading provider of pet e-commerce platform services and solutions",
+    "name": "Women'S Apparel E-Commerce Solutions Inc.",
+    "description": "Leading provider of women's apparel e-commerce services and solutions",
     "city": "New York",
-    "email": "contact@pete-commerceplatformsolutions.com",
-    "homepage": "https://pete-commerceplatform-solutions.com",
+    "email": "contact@women'sapparele-commercesolutions.com",
+    "homepage": "https://women'sapparele-commerce-solutions.com",
     "logoUrl": "",
     "phoneNumber": "+1-555-0123"
   },
   {
-    "name": "Global Pet E-Commerce Platform Partners",
-    "description": "International network specializing in pet e-commerce platform industry partnerships",
+    "name": "Global Women'S Apparel E-Commerce Partners",
+    "description": "International network specializing in women's apparel e-commerce industry partnerships",
     "city": "San Francisco",
-    "email": "partnerships@globalpete-commerceplatform.com",
-    "homepage": "https://global-pete-commerceplatform.com",
+    "email": "partnerships@globalwomen'sapparele-commerce.com",
+    "homepage": "https://global-women'sapparele-commerce.com",
     "logoUrl": "",
     "phoneNumber": "+1-555-0456"
   },
   {
-    "name": "Pet E-Commerce Platform Connect Ltd.",
-    "description": "Connecting businesses in the pet e-commerce platform sector with growth opportunities",
+    "name": "Women'S Apparel E-Commerce Connect Ltd.",
+    "description": "Connecting businesses in the women's apparel e-commerce sector with growth opportunities",
     "city": "Austin",
-    "email": "info@pete-commerceplatformconnect.com",
-    "homepage": "https://pete-commerceplatform-connect.com",
+    "email": "info@women'sapparele-commerceconnect.com",
+    "homepage": "https://women'sapparele-commerce-connect.com",
     "logoUrl": "",
     "phoneNumber": "+1-555-0789"
   }

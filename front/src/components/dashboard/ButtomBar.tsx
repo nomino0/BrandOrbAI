@@ -9,8 +9,15 @@ export function ButtomBar({ showValidate = true, onValidate }: { showValidate?: 
 
   const handleValidate = async () => {
     setLoading(true);
-    if (onValidate) {
-      await onValidate();
+    try {
+      if (onValidate) {
+        await onValidate();
+      }
+      // After main validation, trigger SWOT analysis
+      const { runSWOTAnalysis } = await import('@/services/agents');
+      await runSWOTAnalysis();
+    } catch (error) {
+      console.error('Validation error:', error);
     }
     setLoading(false);
     router.push("/dashboard/critical-report");

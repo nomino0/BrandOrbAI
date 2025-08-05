@@ -341,7 +341,7 @@ def generate_answer(
         return state
 
 
-def generate_summary(state: State) -> State:
+def generate_summary(state: State, include_image_metadata: bool = False, image_data: dict = None) -> State:
     """Generate a comprehensive summary of the business idea based on all Q&A analysis."""
     try:
         model = get_model()
@@ -451,6 +451,33 @@ Based on the comprehensive analysis, this business shows strong potential with c
 
         # Update the state with the summary
         state.summary = summary_text
+        
+        # If image metadata is provided, append it to the summary
+        if include_image_metadata and image_data:
+            image_metadata = "\n\n---\n\n## Generated Visual Assets\n\n"
+            
+            if image_data.get('serve_url'):
+                image_metadata += f"**Background Image URL:** {image_data['serve_url']}\n"
+            elif image_data.get('filename'):
+                # Construct serve URL from filename
+                import os
+                backend_base_url = os.getenv('BACKEND_URL', 'http://localhost:8001')
+                serve_url = f"{backend_base_url}/images/{image_data['filename']}"
+                image_metadata += f"**Background Image URL:** {serve_url}\n"
+            
+            if image_data.get('filename'):
+                image_metadata += f"**Image Filename:** {image_data['filename']}\n"
+            
+            if image_data.get('generated_at'):
+                image_metadata += f"**Generated:** {image_data['generated_at']}\n"
+                
+            # Use local path instead of original Pollinations URL
+            if image_data.get('local_path'):
+                image_metadata += f"**Local Path:** {image_data['local_path']}\n"
+            
+            # Add image metadata to summary
+            state.summary += image_metadata
+        
         print(f"Final summary length: {len(summary_text)}")
 
         return state
