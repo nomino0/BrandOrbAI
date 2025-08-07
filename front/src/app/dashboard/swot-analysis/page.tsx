@@ -227,8 +227,8 @@ export default function SWOTAnalysisPage() {
         transition={{ duration: 0.5 }}
         className="text-center space-y-4"
       >
-        <h1 className="text-4xl font-bold tracking-tight">SWOT Analysis</h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+        <h1 className="text-3xl font-bold tracking-tight">SWOT Analysis</h1>
+        <p className="text-l text-muted-foreground max-w-2xl mx-auto">
           Strategic analysis of your business strengths, weaknesses, opportunities, and threats
         </p>
       </motion.div>

@@ -38,11 +38,12 @@ export function NavMain({
 }: {
   items: {
     title: string
-    url: string
+    url?: string
     icon?: Icon
     status?: string
     progress?: number
     isActive?: boolean
+    isExpandedByDefault?: boolean
     items?: {
       title: string
       url: string
@@ -50,14 +51,31 @@ export function NavMain({
     }[]
   }[]
 }) {
-  const [openItems, setOpenItems] = useState<Record<string, boolean>>({
-    "Brand Identity": true, // Keep Brand Identity expanded by default
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>(() => {
+    const defaultOpen: Record<string, boolean> = {
+      "Brand Identity": true, // Keep Brand Identity expanded by default
+    }
+    
+    // Add items that should be expanded by default
+    items.forEach(item => {
+      if (item.isExpandedByDefault) {
+        defaultOpen[item.title] = true
+      }
+    })
+    
+    return defaultOpen
   })
   const pathname = usePathname()
   const router = useRouter()
   const { resolvedTheme } = useTheme()
 
   const handleItemClick = (item: any, e: React.MouseEvent) => {
+    // If item has no URL (parent category), prevent navigation
+    if (!item.url) {
+      e.preventDefault()
+      return
+    }
+    
     // Prevent navigation if item is locked or in progress
     if (item.status === 'locked' || item.status === 'in_progress') {
       e.preventDefault()
@@ -96,8 +114,8 @@ export function NavMain({
     }))
   }
 
-  const isCurrentPage = (url: string) => {
-    return pathname === url
+  const isCurrentPage = (url?: string) => {
+    return url ? pathname === url : false
   }
 
   const getItemStyles = (item: any) => {
@@ -105,6 +123,11 @@ export function NavMain({
 
     if (isCurrent) {
       return "bg-white dark:bg-muted text-gray-900 dark:text-foreground border border-border/20 dark:border-border"
+    }
+    
+    // If item has no URL, show as non-clickable
+    if (!item.url) {
+      return "text-sidebar-foreground cursor-default"
     }
     
     return "hover:bg-sidebar-accent/50 text-sidebar-foreground"
@@ -161,31 +184,57 @@ export function NavMain({
                   <SidebarMenuButton 
                     tooltip={item.title}
                     className={`w-full h-14 px-3 rounded-lg transition-all duration-200 ${getItemStyles(item)}`}
-                    asChild
+                    asChild={!!item.url}
                   >
-                    <a href={item.url} className="flex items-center gap-3 w-full">
-                      <div className="flex items-center gap-3 flex-1">
-                        {item.icon && (
-                          <item.icon className={`h-5 w-5 shrink-0 ${getIconStyles(item)}`} />
-                        )}
-                        <div className="flex flex-col items-start">
-                          <span className="truncate font-medium text-sm leading-tight">{item.title}</span>
-                          <span className={`text-xs font-medium ${getStatusTextColor(item.status || "")}`}>
-                            {getStatusText(item.status || "")}
-                          </span>
+                    {item.url ? (
+                      <a href={item.url} className="flex items-center gap-3 w-full">
+                        <div className="flex items-center gap-3 flex-1">
+                          {item.icon && (
+                            <item.icon className={`h-5 w-5 shrink-0 ${getIconStyles(item)}`} />
+                          )}
+                          <div className="flex flex-col items-start">
+                            <span className="truncate font-medium text-sm leading-tight">{item.title}</span>
+                            <span className={`text-xs font-medium ${getStatusTextColor(item.status || "")}`}>
+                              {getStatusText(item.status || "")}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {getStatusIcon(item.status || "", resolvedTheme === 'dark')}
+                          {item.items && item.items.length > 0 && (
+                            <ChevronRight 
+                              className={`h-4 w-4 transition-transform duration-200 ${
+                                openItems[item.title] ? 'rotate-90' : ''
+                              }`} 
+                            />
+                          )}
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="flex items-center gap-3 flex-1">
+                          {item.icon && (
+                            <item.icon className={`h-5 w-5 shrink-0 ${getIconStyles(item)}`} />
+                          )}
+                          <div className="flex flex-col items-start">
+                            <span className="truncate font-medium text-sm leading-tight">{item.title}</span>
+                            <span className={`text-xs font-medium ${getStatusTextColor(item.status || "")}`}>
+                              {getStatusText(item.status || "")}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {getStatusIcon(item.status || "", resolvedTheme === 'dark')}
+                          {item.items && item.items.length > 0 && (
+                            <ChevronRight 
+                              className={`h-4 w-4 transition-transform duration-200 ${
+                                openItems[item.title] ? 'rotate-90' : ''
+                              }`} 
+                            />
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {getStatusIcon(item.status || "", resolvedTheme === 'dark')}
-                        {item.items && item.items.length > 0 && (
-                          <ChevronRight 
-                            className={`h-4 w-4 transition-transform duration-200 ${
-                              openItems[item.title] ? 'rotate-90' : ''
-                            }`} 
-                          />
-                        )}
-                      </div>
-                    </a>
+                    )}
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 

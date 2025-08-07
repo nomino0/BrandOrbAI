@@ -166,6 +166,7 @@ export default function IdeationPage() {
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageGenerationAttempted, setImageGenerationAttempted] = useState(false);
+  const [retryLoading, setRetryLoading] = useState(false);
   const router = useRouter();
 
   const savedSummary = typeof window !== 'undefined' ? localStorage.getItem('brandorb_summary') : null;
@@ -495,6 +496,108 @@ export default function IdeationPage() {
 
   return (
     <div className="flex flex-col min-h-[70vh] w-full px-4 relative overflow-hidden">
+      {/* Show skeleton while data is loading */}
+      {!mounted && (
+        <div className="w-full max-w-7xl mx-auto flex-1">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="space-y-6"
+          >
+            {/* Header skeleton */}
+            <div className="w-full max-w-4xl mx-auto">
+              <Card className="rounded-xl shadow-sm border border-border/50 bg-background overflow-hidden p-0">
+                <div className="relative h-64 bg-muted animate-pulse rounded-xl flex items-center justify-center">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-background/30 to-transparent animate-shimmer" />
+                  <div className="flex flex-col items-center justify-center h-full space-y-4 relative z-10">
+                    <div className="h-12 w-12 bg-muted-foreground/20 animate-pulse rounded-lg"></div>
+                    <div className="space-y-2 text-center">
+                      <div className="h-6 w-48 bg-muted-foreground/20 animate-pulse rounded"></div>
+                      <div className="h-4 w-32 bg-muted-foreground/20 animate-pulse rounded"></div>
+                    </div>
+                    <div className="flex items-center space-x-1 mt-4">
+                      <div className="w-2 h-2 bg-primary/50 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                      <div className="w-2 h-2 bg-primary/50 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                      <div className="w-2 h-2 bg-primary/50 rounded-full animate-bounce"></div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Content skeleton */}
+            <div className="w-full max-w-4xl mx-auto">
+              <Card className="rounded-xl shadow-sm border border-border/50 bg-background overflow-hidden">
+                <CardContent className="p-8">
+                  <div className="space-y-6">
+                    {/* Header skeleton */}
+                    <div className="space-y-3">
+                      <div className="h-8 w-3/4 bg-muted animate-pulse rounded"></div>
+                      <div className="h-px bg-border w-full"></div>
+                    </div>
+                    
+                    {/* Paragraph skeletons */}
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="h-4 w-full bg-muted animate-pulse rounded"></div>
+                        <div className="h-4 w-full bg-muted animate-pulse rounded"></div>
+                        <div className="h-4 w-5/6 bg-muted animate-pulse rounded"></div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="h-4 w-full bg-muted animate-pulse rounded"></div>
+                        <div className="h-4 w-4/5 bg-muted animate-pulse rounded"></div>
+                      </div>
+                    </div>
+                    
+                    {/* List skeleton */}
+                    <div className="space-y-2 ml-6">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                        <div className="h-4 w-3/4 bg-muted animate-pulse rounded"></div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                        <div className="h-4 w-2/3 bg-muted animate-pulse rounded"></div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                        <div className="h-4 w-4/5 bg-muted animate-pulse rounded"></div>
+                      </div>
+                    </div>
+
+                    {/* Additional sections */}
+                    <div className="space-y-3 pt-4">
+                      <div className="h-6 w-1/2 bg-muted animate-pulse rounded"></div>
+                      <div className="space-y-2">
+                        <div className="h-4 w-full bg-muted animate-pulse rounded"></div>
+                        <div className="h-4 w-full bg-muted animate-pulse rounded"></div>
+                        <div className="h-4 w-3/4 bg-muted animate-pulse rounded"></div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Bottom bar skeleton */}
+            <div className="w-full max-w-7xl mx-auto">
+              <Card className="rounded-xl border border-border/50 bg-background">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <div className="h-5 w-32 bg-muted animate-pulse rounded"></div>
+                      <div className="h-4 w-48 bg-muted animate-pulse rounded"></div>
+                    </div>
+                    <div className="h-10 w-24 bg-muted animate-pulse rounded-md"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {hasRealData && mounted && (
         <>
           <motion.div
@@ -517,15 +620,45 @@ export default function IdeationPage() {
                     backgroundRepeat: 'no-repeat'
                   }}
                 >
-                  {/* Skeleton loading state */}
+                  {/* Enhanced Skeleton loading state */}
                   {imageLoading && (
-                    <div className="absolute inset-0 bg-muted/50">
-                      <div role="status" className="w-full h-full p-4 border border-gray-200 rounded-sm shadow-sm animate-pulse md:p-6 dark:border-gray-700">
-                        <div className="flex items-center justify-center h-full mb-4 bg-gray-300 rounded-sm dark:bg-gray-700">
-                          <svg className="w-10 h-10 text-gray-200 dark:text-gray-600" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 20">
-                            <path d="M14.066 0H7v5a2 2 0 0 1-2 2H0v11a1.97 1.97 0 0 0 1.934 2h12.132A1.97 1.97 0 0 0 16 18V2a1.97 1.97 0 0 0-1.934-2ZM10.5 6a1.5 1.5 0 1 1 0 2.999A1.5 1.5 0 0 1 10.5 6Zm2.221 10.515a1 1 0 0 1-.858.485h-8a1 1 0 0 1-.9-1.43L5.6 10.039a.978.978 0 0 1 .936-.57 1 1 0 0 1 .9.632l1.181 2.981.541-1a.945.945 0 0 1 .883-.522 1 1 0 0 1 .879.529l1.832 3.438a1 1 0 0 1-.031.988Z"/>
-                            <path d="M5 5V.13a2.96 2.96 0 0 0-1.293.749L.879 3.707A2.98 2.98 0 0 0 .13 5H5Z"/>
-                          </svg>
+                    <div className="absolute inset-0 bg-muted animate-pulse">
+                      {/* Shimmer overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-background/30 to-transparent animate-shimmer" />
+                      
+                      {/* Content skeleton */}
+                      <div className="flex flex-col items-center justify-center h-full space-y-4 p-6 relative z-10">
+                        {/* Icon placeholder */}
+                        <div className="h-12 w-12 bg-muted-foreground/30 animate-pulse rounded-lg"></div>
+                        
+                        {/* Title skeleton */}
+                        <div className="space-y-2 text-center">
+                          <div className="h-6 w-48 bg-muted-foreground/30 animate-pulse rounded"></div>
+                          <div className="h-4 w-32 bg-muted-foreground/30 animate-pulse rounded"></div>
+                        </div>
+                        
+                        {/* Loading indicator */}
+                        <div className="flex items-center space-x-2 mt-4">
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                        </div>
+                        
+                        <p className="text-xs text-muted-foreground animate-pulse mt-2">
+                          Generating visual...
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show skeleton even when not loading if no image */}
+                  {!imageLoading && !backgroundImage && !imageError && (
+                    <div className="absolute inset-0 bg-muted/50 animate-pulse">
+                      <div className="flex flex-col items-center justify-center h-full space-y-4 p-6">
+                        <div className="h-12 w-12 bg-muted-foreground/20 animate-pulse rounded-lg"></div>
+                        <div className="space-y-2 text-center">
+                          <div className="h-6 w-48 bg-muted-foreground/20 animate-pulse rounded"></div>
+                          <div className="h-4 w-32 bg-muted-foreground/20 animate-pulse rounded"></div>
                         </div>
                       </div>
                     </div>
@@ -548,30 +681,56 @@ export default function IdeationPage() {
                   
                   {/* Loading animation */}
                   {imageLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-white/5">
-                      <div className="flex flex-col items-center space-y-2">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                        <p className="text-xs text-muted-foreground animate-pulse">
-                          Generating background...
-                        </p>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-white/5 backdrop-blur-sm">
+                      <div className="flex flex-col items-center space-y-3">
+                        {/* Animated loading spinner */}
+                        <div className="relative">
+                          <div className="w-12 h-12 border-4 border-muted rounded-full"></div>
+                          <div className="w-12 h-12 border-4 border-primary rounded-full animate-spin border-t-transparent absolute top-0 left-0"></div>
+                        </div>
+                        
+                        {/* Loading text with typewriter effect */}
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground animate-pulse">
+                            Generating visual assets...
+                          </p>
+                          <div className="flex justify-center space-x-1 mt-2">
+                            <div className="w-1 h-1 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                            <div className="w-1 h-1 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                            <div className="w-1 h-1 bg-primary rounded-full animate-bounce"></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
                   
                   {/* Error state with retry button */}
                   {imageError && !imageLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-white/5">
-                      <div className="flex flex-col items-center space-y-2 text-center p-4">
-                        <p className="text-xs text-muted-foreground">
-                          Failed to generate image
-                        </p>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-white/5 backdrop-blur-sm">
+                      <div className="flex flex-col items-center space-y-4 text-center p-4">
+                        <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground mb-1">
+                            Failed to generate image
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {imageError}
+                          </p>
+                        </div>
                         <Button 
                           variant="outline" 
                           size="sm"
+                          disabled={retryLoading}
                           onClick={() => {
+                            setRetryLoading(true);
                             setImageError(null);
                             setBackgroundImage(null);
-                            setImageGenerationAttempted(false); // Reset the flag to allow retry
+                            setImageGenerationAttempted(false);
+                            
                             // Trigger regeneration with updated caching system
                             const generateImage = async () => {
                               if (savedSummary && savedBusinessIdea) {
@@ -609,13 +768,28 @@ export default function IdeationPage() {
                                   setImageError(error instanceof Error ? error.message : 'Failed to generate image');
                                 } finally {
                                   setImageLoading(false);
+                                  setRetryLoading(false);
                                 }
+                              } else {
+                                setRetryLoading(false);
                               }
                             };
                             generateImage();
                           }}
                         >
-                          Retry
+                          {retryLoading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                              Retrying...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              Try Again
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -628,54 +802,126 @@ export default function IdeationPage() {
             <div className="w-full max-w-4xl mx-auto mb-6">
               <Card className="rounded-xl shadow-sm border border-border/50 bg-background overflow-hidden">
                 <CardContent className="p-8 max-w-none text-foreground">
-                  <ReactMarkdown 
-                    components={{
-                      // GitHub-style headings
-                      h1: ({ children }) => <h1 className="text-2xl font-semibold text-foreground mb-4 pb-2 border-b border-border">{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-xl font-semibold text-foreground mb-3 mt-6 pb-1 border-b border-border">{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-lg font-semibold text-foreground mb-2 mt-4">{children}</h3>,
-                      h4: ({ children }) => <h4 className="text-base font-semibold text-foreground mb-2 mt-3">{children}</h4>,
-                      h5: ({ children }) => <h5 className="text-sm font-semibold text-foreground mb-2 mt-3">{children}</h5>,
-                      h6: ({ children }) => <h6 className="text-sm font-medium text-muted-foreground mb-2 mt-3">{children}</h6>,
+                  {!cleanedSummary ? (
+                    /* Enhanced content skeleton with staggered animations */
+                    <div className="space-y-6">
+                      {/* Header skeleton */}
+                      <div className="space-y-3">
+                        <div className="h-8 w-3/4 bg-muted animate-pulse"></div>
+                        <div className="h-px bg-border w-full"></div>
+                      </div>
                       
-                      // GitHub-style paragraphs
-                      p: ({ children }) => <p className="mb-4 leading-6 text-foreground">{children}</p>,
+                      {/* Paragraph skeletons with staggered delays */}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="h-4 w-full bg-muted animate-pulse animate-delay-100"></div>
+                          <div className="h-4 w-full bg-muted animate-pulse animate-delay-200"></div>
+                          <div className="h-4 w-5/6 bg-muted animate-pulse animate-delay-300"></div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="h-4 w-full bg-muted animate-pulse animate-delay-100"></div>
+                          <div className="h-4 w-4/5 bg-muted animate-pulse animate-delay-200"></div>
+                        </div>
+                      </div>
                       
-                      // GitHub-style lists (no bold, proper spacing)
-                      ol: ({ children }) => <ol className="list-decimal ml-6 mb-4 space-y-1">{children}</ol>,
-                      ul: ({ children }) => <ul className="list-disc ml-6 mb-4 space-y-1">{children}</ul>,
-                      li: ({ children }) => <li className="leading-6 text-foreground">{children}</li>,
+                      {/* List skeleton */}
+                      <div className="space-y-2 ml-6">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                          <div className="h-4 w-3/4 bg-muted animate-pulse animate-delay-100"></div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                          <div className="h-4 w-2/3 bg-muted animate-pulse animate-delay-200"></div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                          <div className="h-4 w-4/5 bg-muted animate-pulse animate-delay-300"></div>
+                        </div>
+                      </div>
                       
-                      // GitHub-style emphasis
-                      strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                      em: ({ children }) => <em className="italic text-foreground">{children}</em>,
+                      {/* Another section */}
+                      <div className="space-y-3 pt-4">
+                        <div className="h-6 w-1/2 bg-muted animate-pulse"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 w-full bg-muted animate-pulse animate-delay-100"></div>
+                          <div className="h-4 w-full bg-muted animate-pulse animate-delay-200"></div>
+                          <div className="h-4 w-3/4 bg-muted animate-pulse animate-delay-300"></div>
+                        </div>
+                      </div>
                       
-                      // GitHub-style code
-                      code: ({ children, ...props }) => {
-                        const isInline = !props.className?.includes('language-');
-                        return isInline ? (
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground">{children}</code>
-                        ) : (
-                          <code className="block bg-muted p-3 rounded-md text-sm font-mono text-foreground overflow-x-auto">{children}</code>
-                        );
-                      },
-                      
-                      // GitHub-style blockquotes
-                      blockquote: ({ children }) => (
-                        <blockquote className="border-l-4 border-border pl-4 py-1 my-4 text-muted-foreground italic">{children}</blockquote>
-                      ),
-                      
-                      // GitHub-style horizontal rule
-                      hr: () => <hr className="my-6 border-t border-border" />,
-                      
-                      // GitHub-style links
-                      a: ({ children, href }) => (
-                        <a href={href} className="text-primary hover:underline underline-offset-2">{children}</a>
-                      )
-                    }}
-                  >
-                    {cleanedSummary}
-                  </ReactMarkdown>
+                      {/* Final section */}
+                      <div className="space-y-3 pt-4">
+                        <div className="h-6 w-2/3 bg-muted animate-pulse"></div>
+                        <div className="space-y-2">
+                          <div className="h-4 w-full bg-muted animate-pulse animate-delay-100"></div>
+                          <div className="h-4 w-5/6 bg-muted animate-pulse animate-delay-200"></div>
+                        </div>
+                      </div>
+
+                      {/* Loading indicator at bottom */}
+                      <div className="flex items-center justify-center pt-6">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                        </div>
+                        <span className="ml-3 text-sm text-muted-foreground animate-pulse">
+                          Loading content...
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <ReactMarkdown 
+                      components={{
+                        // GitHub-style headings
+                        h1: ({ children }) => <h1 className="text-2xl font-semibold text-foreground mb-4 pb-2 border-b border-border">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-xl font-semibold text-foreground mb-3 mt-6 pb-1 border-b border-border">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-lg font-semibold text-foreground mb-2 mt-4">{children}</h3>,
+                        h4: ({ children }) => <h4 className="text-base font-semibold text-foreground mb-2 mt-3">{children}</h4>,
+                        h5: ({ children }) => <h5 className="text-sm font-semibold text-foreground mb-2 mt-3">{children}</h5>,
+                        h6: ({ children }) => <h6 className="text-sm font-medium text-muted-foreground mb-2 mt-3">{children}</h6>,
+                        
+                        // GitHub-style paragraphs
+                        p: ({ children }) => <p className="mb-4 leading-6 text-foreground">{children}</p>,
+                        
+                        // GitHub-style lists (no bold, proper spacing)
+                        ol: ({ children }) => <ol className="list-decimal ml-6 mb-4 space-y-1">{children}</ol>,
+                        ul: ({ children }) => <ul className="list-disc ml-6 mb-4 space-y-1">{children}</ul>,
+                        li: ({ children }) => <li className="leading-6 text-foreground">{children}</li>,
+                        
+                        // GitHub-style emphasis
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                        em: ({ children }) => <em className="italic text-foreground">{children}</em>,
+                        
+                        // GitHub-style code
+                        code: ({ children, ...props }) => {
+                          const isInline = !props.className?.includes('language-');
+                          return isInline ? (
+                            <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground">{children}</code>
+                          ) : (
+                            <code className="block bg-muted p-3 rounded-md text-sm font-mono text-foreground overflow-x-auto">{children}</code>
+                          );
+                        },
+                        
+                        // GitHub-style blockquotes
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-4 border-border pl-4 py-1 my-4 text-muted-foreground italic">{children}</blockquote>
+                        ),
+                        
+                        // GitHub-style horizontal rule
+                        hr: () => <hr className="my-6 border-t border-border" />,
+                        
+                        // GitHub-style links
+                        a: ({ children, href }) => (
+                          <a href={href} className="text-primary hover:underline underline-offset-2">{children}</a>
+                        )
+                      }}
+                    >
+                      {cleanedSummary}
+                    </ReactMarkdown>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -690,6 +936,35 @@ export default function IdeationPage() {
             />
           </div>
         </>
+      )}
+
+      {/* Show empty state when mounted but no data */}
+      {mounted && !hasRealData && (
+        <div className="w-full max-w-4xl mx-auto flex-1 flex items-center justify-center">
+          <Card className="p-8 text-center">
+            <CardContent>
+              <div className="space-y-4">
+                <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">No Business Plan Found</h3>
+                  <p className="text-muted-foreground">
+                    Please generate a business plan first to view the ideation page.
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => router.push('/dashboard')}
+                  className="mt-4"
+                >
+                  Go to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

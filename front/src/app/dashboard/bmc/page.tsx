@@ -69,7 +69,7 @@ export default function BMCPage() {
   const bottomBlocks = bmcBlocks.slice(7); // Last 2 blocks for bottom
 
   return (
-    <div className="w-full min-h-screen bg-muted/50 flex flex-col items-center py-8 px-2">
+    <div className="w-full min-h-screen bg-muted/50 flex flex-col items-center py-8 px-4">
       <h1 className="text-2xl font-bold mb-6 text-center">
         Business Model Canvas
       </h1>
@@ -81,7 +81,7 @@ export default function BMCPage() {
       )}
 
       {!loading && (
-        <div className="w-full max-w-7xl px-2 md:px-0 mx-auto space-y-8">
+        <div className="w-full px-4 mx-auto space-y-8">
           {/* Main BMC grid - 5 columns, 2 rows */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 min-h-[600px]">
             {/* Key Partners - spans 2 rows */}
@@ -221,21 +221,46 @@ function BMCBlock({
     );
   }
 
+  // Function to format content - split by commas and create list items
+  const formatContent = (text: string) => {
+    if (!text) return null;
+    
+    // Split by commas and clean up each item
+    const items = text.split(',').map(item => item.trim()).filter(item => item.length > 0);
+    
+    // If there's only one item or it doesn't look like a list, return as is
+    if (items.length <= 1 || text.length < 50) {
+      return <ReactMarkdown>{text}</ReactMarkdown>;
+    }
+    
+    // Return as a bulleted list
+    return (
+      <ul className="space-y-1">
+        {items.map((item, index) => (
+          <li key={index} className="flex items-start">
+            <span className="inline-block w-1.5 h-1.5 bg-current rounded-full mt-1.5 mr-2 flex-shrink-0 opacity-60"></span>
+            <span className="flex-1 text-sm">{item}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   if (isGrid) {
     return (
       <Card className={clsx("h-full rounded-xl shadow-sm border border-border bg-card", className)}>
-        <div className="p-6 h-full flex flex-col">
-          <h3 className="font-semibold text-foreground mb-3">{title}</h3>
-          <p className="text-sm text-muted-foreground mb-4">{question}</p>
+        <div className="p-4 h-full flex flex-col">
+          <h3 className="font-semibold text-foreground mb-2">{title}</h3>
+          <p className="text-xs text-muted-foreground mb-3">{question}</p>
           <div className="flex-1 overflow-y-auto">
             {content ? (
-              <div className={`p-4 rounded-xl ${noteColors[color]} mb-3 shadow-sm`}>
+              <div className={`p-3 rounded-xl ${noteColors[color]} shadow-sm`}>
                 <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
-                  <ReactMarkdown>{content}</ReactMarkdown>
+                  {formatContent(content)}
                 </div>
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-muted text-muted-foreground text-sm shadow-sm">
+              <div className="p-3 rounded-xl bg-muted text-muted-foreground text-sm shadow-sm">
                 No data available
               </div>
             )}
@@ -259,7 +284,7 @@ function BMCBlock({
         {content ? (
           <div className={`p-3 rounded-lg w-full ${noteColors[color]}`}>
             <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
-              <ReactMarkdown>{content}</ReactMarkdown>
+              {formatContent(content)}
             </div>
           </div>
         ) : (

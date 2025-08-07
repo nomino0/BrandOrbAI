@@ -98,86 +98,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Create navigation data with dynamic status
   const getNavData = () => {
-    if (!workflowStatus) {
-      // Default locked state
-      return [
-        {
-          title: "Ideation",
-          url: "/dashboard/ideation",
-          icon: Lamp,
-          status: "completed", // Always completed after onboarding
-          items: [],
-        },
-        {
-          title: "Viability Assessment",
-          url: "/dashboard/viability-assessment",
-          icon: FileText,
-          status: "locked",
-          progress: 0,
-          items: [],
-        },
-        {
-          title: "SWOT Analysis",
-          url: "/dashboard/swot-analysis",
-          icon: ChartLine,
-          status: "locked",
-          items: [],
-        },
-        {
-          title: "Business Model Canvas",
-          url: "/dashboard/bmc",
-          icon: Grid,
-          status: "locked",
-          items: [],
-        },
-        {
-          title: "Brand Identity",
-          url: "/dashboard/identity",
-          icon: Target,
-          status: "locked",
-          items: [
-            {
-              title: "Guidelines",
-              url: "/dashboard/identity/brand-guidelines",
-              status: "locked",
-            },
-            {
-              title: "Company Profile",
-              url: "/dashboard/identity/profile",
-              status: "locked",
-            }
-          ],
-        },
-        {
-          title: "Marketing Strategy",
-          url: "/dashboard/marketing-strategy",
-          icon: TrendingUp,
-          status: "locked",
-          items: [],
-        },
-        {
-          title: "Pitch Deck",
-          url: "/dashboard/pitch-deck",
-          icon: Presentation,
-          status: "locked",
-          items: [],
-        },
-      ]
-    }
-
     return [
       {
         title: "Ideation",
         url: "/dashboard/ideation",
         icon: Lamp,
-        status: "completed", // Always completed if we have summary and idea
+        status: "completed", // Always completed after onboarding
         items: [],
       },
       {
         title: "Viability Assessment",
         url: "/dashboard/viability-assessment",
         icon: FileText,
-        status: workflowStatus.viability_assessment || "locked",
+        status: workflowStatus?.viability_assessment || "locked",
         progress: 0,
         items: [],
       },
@@ -185,46 +118,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: "SWOT Analysis",
         url: "/dashboard/swot-analysis",
         icon: ChartLine,
-        status: workflowStatus.swot_analysis || "locked",
+        status: workflowStatus?.swot_analysis || "locked",
         items: [],
       },
       {
         title: "Business Model Canvas",
         url: "/dashboard/bmc",
         icon: Grid,
-        status: workflowStatus.bmc || "locked",
+        status: workflowStatus?.bmc || "locked",
         items: [],
       },
       {
         title: "Brand Identity",
         url: "/dashboard/identity",
         icon: Target,
-        status: workflowStatus.brand_identity || "locked",
+        status: workflowStatus?.brand_identity || "locked",
+        items: [],
+      },
+      {
+        title: "Go to Market",
+        icon: TrendingUp,
+        status: workflowStatus?.marketing_strategy || "locked",
+        isExpandedByDefault: true,
         items: [
           {
-            title: "Guidelines",
-            url: "/dashboard/identity/brand-guidelines",
-            status: workflowStatus.brand_identity || "locked",
+            title: "Marketing Strategie",
+            url: "/dashboard/go-to-market/marketing-strategy",
+            status: workflowStatus?.marketing_strategy || "locked",
+          },
+          {
+            title: "Sales Strategie",
+            url: "/dashboard/go-to-market/sales-strategy",
+            status: workflowStatus?.marketing_strategy || "locked",
+          },
+          {
+            title: "Online Presence",
+            url: "/dashboard/go-to-market/online-presence",
+            status: workflowStatus?.marketing_strategy || "locked",
           },
           {
             title: "Company Profile",
-            url: "/dashboard/identity/profile",
-            status: workflowStatus.brand_identity || "locked",
+            url: "/dashboard/go-to-market/company-profile",
+            status: workflowStatus?.marketing_strategy || "locked",
           }
         ],
-      },
-      {
-        title: "Marketing Strategy",
-        url: "/dashboard/marketing-strategy",
-        icon: TrendingUp,
-        status: workflowStatus.marketing_strategy || "locked",
-        items: [],
       },
       {
         title: "Pitch Deck",
         url: "/dashboard/pitch-deck",
         icon: Presentation,
-        status: workflowStatus.pitch_deck || "locked",
+        status: workflowStatus?.pitch_deck || "locked",
         items: [],
       },
     ]
