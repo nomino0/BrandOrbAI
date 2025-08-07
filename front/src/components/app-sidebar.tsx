@@ -147,11 +147,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             status: workflowStatus?.marketing_strategy || "locked",
           },
           {
-            title: "Sales Strategie",
-            url: "/dashboard/go-to-market/sales-strategy",
-            status: workflowStatus?.marketing_strategy || "locked",
-          },
-          {
             title: "Online Presence",
             url: "/dashboard/go-to-market/online-presence",
             status: workflowStatus?.marketing_strategy || "locked",

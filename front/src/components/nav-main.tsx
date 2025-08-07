@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { Check, Spinner, Lock, ChevronRight, type Icon } from "@mynaui/icons-react"
 import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
@@ -51,23 +52,21 @@ export function NavMain({
     }[]
   }[]
 }) {
-  const [openItems, setOpenItems] = useState<Record<string, boolean>>(() => {
-    const defaultOpen: Record<string, boolean> = {
-      "Brand Identity": true, // Keep Brand Identity expanded by default
-    }
-    
-    // Add items that should be expanded by default
-    items.forEach(item => {
-      if (item.isExpandedByDefault) {
-        defaultOpen[item.title] = true
-      }
-    })
-    
-    return defaultOpen
-  })
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>({})
   const pathname = usePathname()
   const router = useRouter()
   const { resolvedTheme } = useTheme()
+
+  // Set expanded state for items that should be expanded by default
+  React.useEffect(() => {
+    const newState: Record<string, boolean> = {}
+    items.forEach(item => {
+      if (item.isExpandedByDefault) {
+        newState[item.title] = true
+      }
+    })
+    setOpenItems(newState)
+  }, [items])
 
   const handleItemClick = (item: any, e: React.MouseEvent) => {
     // If item has no URL (parent category), prevent navigation
@@ -175,7 +174,7 @@ export function NavMain({
         <SidebarMenu className="gap-1">
           {items.map((item) => (
             <Collapsible
-              key={item.title}
+              key={`${item.title}-${pathname}`}
               open={openItems[item.title]}
               onOpenChange={() => toggleItem(item.title)}
             >

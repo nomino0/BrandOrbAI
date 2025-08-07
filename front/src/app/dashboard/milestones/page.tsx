@@ -1,11 +1,6 @@
 "use client";
 
 import React from "react";
-import { AppSidebar } from "@/components/app-sidebar"
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,18 +19,9 @@ import Link from "next/link";
 
 export default function MilestonesPage() {
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as React.CSSProperties
-      }
-    >
-      <AppSidebar variant="inset" />
-      <SidebarInset>
-        {/* Top Bar */}
-        <header className="flex h-12 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b">
+    <>
+      {/* Top Bar */}
+      <header className="flex h-12 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b">
           <div className="flex items-center gap-2 px-4 flex-1">
             <h1 className="text-lg font-semibold">Development Milestones - Stage 4</h1>
             <Badge className="bg-gray-100 text-gray-500 border-gray-200">
@@ -104,7 +90,6 @@ export default function MilestonesPage() {
             </Button>
           </div>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+    </>
   );
 }
