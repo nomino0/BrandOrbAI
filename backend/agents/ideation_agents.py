@@ -454,14 +454,22 @@ Based on the comprehensive analysis, this business shows strong potential with c
         
         # Automatically save business summary to file for other agents
         try:
+            import os
+            from datetime import datetime
+            
             output_dir = os.path.join(os.path.dirname(__file__), "output")
             os.makedirs(output_dir, exist_ok=True)
             summary_file_path = os.path.join(output_dir, "business_summary.txt")
             
+            # Add current date to the summary for freshness
+            current_date = datetime.now().strftime("%m/%d/%Y")
+            formatted_summary = f"{summary_text}\nGenerated on {current_date}"
+            
             with open(summary_file_path, "w", encoding="utf-8") as f:
-                f.write(summary_text)
+                f.write(formatted_summary)
             
             print(f"Business summary automatically saved to: {summary_file_path}")
+            print(f"Summary content preview: {formatted_summary[:200]}...")
         except Exception as e:
             print(f"Warning: Could not save business summary to file: {e}")
         

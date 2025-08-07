@@ -1,30 +1,30 @@
 {
-  "market_difficulty": 7,
+  "market_difficulty": 6,
   "success_probability": 60,
   "risk_level": "medium",
   "funding_difficulty": 4,
   "time_to_profitability": 12,
-  "market_opportunity_score": 8,
-  "competition_intensity": 6,
-  "regulatory_complexity": 5,
+  "market_opportunity_score": 7,
+  "competition_intensity": 5,
+  "regulatory_complexity": 3,
   "overall_viability_score": 55,
-  "startup_budget_amount": 300,
-  "startup_budget_currency": "DT",
+  "startup_budget_amount": 200000,
+  "startup_budget_currency": "USD",
   "budget_adequacy": "adequate",
   "key_success_factors": [
-    "Strong online presence",
-    "Effective marketing strategy",
-    "Partnerships with educational institutions"
+    "user adoption",
+    "market education",
+    "competitive pricing"
   ],
   "major_risks": [
-    "Stigma surrounding mental health in Tunisia",
-    "Competition from established players",
-    "Regulatory hurdles"
+    "market saturation",
+    "regulatory changes",
+    "financial literacy"
   ],
   "recommendations": [
-    "Conduct thorough market research",
-    "Develop a robust marketing strategy",
-    "Establish partnerships with key stakeholders"
+    "conduct market research",
+    "develop a robust marketing strategy",
+    "partner with financial institutions"
   ],
   "financial_health": {
     "startup_cost_assessment": "medium",
@@ -38,23 +38,23 @@
   },
   "execution_difficulty": {
     "technical_complexity": "medium",
-    "operational_complexity": "medium",
+    "operational_complexity": "high",
     "skill_requirements": "medium"
   },
   "currency_info": {
-    "primary_currency": "DT",
-    "currency_symbol": "DT",
-    "conversion_notes": "1 USD = 2.5 DT"
+    "primary_currency": "USD",
+    "currency_symbol": "USD",
+    "conversion_notes": "no conversion necessary"
   },
   "business_context": {
-    "business_type": "Healthcare Platform",
-    "industry": "Mental Health/Healthcare",
-    "target_market": "Tunisian Market",
-    "product_category": "Group Therapy Services",
-    "budget": 300,
-    "currency": "DT",
-    "target_demographic": "Tunisian youth, with a focus on students and young professionals",
-    "location": "Tunisia",
+    "business_type": "Smart Financial Forecasting Platform",
+    "industry": "Service Industry",
+    "target_market": "SME owners in the service industry",
+    "product_category": "Financial Forecasting Solution",
+    "budget": 200000,
+    "currency": "USD",
+    "target_demographic": "Service-based SMEs with 5-50 employees, business owners with limited financial expertise, companies looking to scale and improve financial management",
+    "location": "Not specified",
     "fulfillment": "Online"
   }
 }

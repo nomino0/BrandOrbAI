@@ -374,6 +374,39 @@ async def save_business_summary(request: dict):
         logger.error(f"Error saving business summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save business summary: {str(e)}")
 
+@app.post("/save-business-summary")
+async def save_business_summary(request: dict):
+    """Save business summary for use by other agents"""
+    try:
+        summary_text = request.get("summary", "")
+        if not summary_text:
+            raise HTTPException(status_code=400, detail="Summary text is required")
+        
+        # Save to business_summary.txt
+        output_dir = os.path.join(os.path.dirname(__file__), "agents", "output")
+        os.makedirs(output_dir, exist_ok=True)
+        summary_file_path = os.path.join(output_dir, "business_summary.txt")
+        
+        # Add current date to the summary
+        from datetime import datetime
+        current_date = datetime.now().strftime("%m/%d/%Y")
+        formatted_summary = f"{summary_text}\nGenerated on {current_date}"
+        
+        with open(summary_file_path, "w", encoding="utf-8") as f:
+            f.write(formatted_summary)
+        
+        logger.info(f"Business summary saved to: {summary_file_path}")
+        
+        return {
+            "message": "Business summary saved successfully",
+            "file_path": summary_file_path,
+            "summary_length": len(formatted_summary)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error saving business summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save business summary: {str(e)}")
+
 @app.post("/run-viability")
 async def run_viability_analysis():
     """Generate comprehensive viability assessment based on existing agent outputs"""
@@ -425,7 +458,12 @@ async def run_swot_analysis():
         business_summary_path = os.path.join(os.path.dirname(__file__), "agents", "output", "business_summary.txt")
         if os.path.exists(business_summary_path):
             with open(business_summary_path, "r", encoding="utf-8") as f:
-                business_idea = f.read()[:200]  # Get first 200 chars as business idea
+                raw_summary = f.read()
+                # Extract business idea from summary, remove date line
+                if "\nGenerated on" in raw_summary:
+                    business_idea = raw_summary.split("\nGenerated on")[0][:200]
+                else:
+                    business_idea = raw_summary[:200]  # Get first 200 chars as business idea
         else:
             # Fallback: generic description
             business_idea = "Digital business platform"
@@ -845,6 +883,69 @@ async def get_session(session_id: str):
     
     logger.info(f"GET SESSION RESPONSE JSON: {json.dumps(response_data.dict(), indent=2)}")
     logger.info("=== END GET SESSION ===\n")
+    
+    return response_data
+
+@app.get("/summary/{session_id}", response_model=SummaryResponse)
+async def get_summary(session_id: str):
+    """Generate and get summary for a session, automatically saving to business_summary.txt."""
+    logger.info("=== GET SUMMARY ===")
+    logger.info(f"Session ID: {session_id}")
+    
+    if session_id not in sessions:
+        logger.error(f"Session not found: {session_id}")
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    state = sessions[session_id]
+    logger.info(f"Generating summary for state: {state}")
+    
+    # Generate summary (this will automatically save to business_summary.txt)
+    updated_state = generate_summary(state)
+    sessions[session_id] = updated_state  # Update the session with the summary
+    
+    if not updated_state.summary:
+        logger.error("Failed to generate summary")
+        raise HTTPException(status_code=500, detail="Failed to generate summary")
+    
+    response_data = SummaryResponse(summary=updated_state.summary)
+    logger.info(f"SUMMARY RESPONSE: Generated summary of length {len(updated_state.summary)}")
+    logger.info("=== END GET SUMMARY ===\n")
+    
+    return response_data
+
+@app.post("/summary-with-image/{session_id}", response_model=SummaryResponse)
+async def get_summary_with_image(session_id: str):
+    """Generate summary with image metadata, automatically saving to business_summary.txt."""
+    logger.info("=== GET SUMMARY WITH IMAGE ===")
+    logger.info(f"Session ID: {session_id}")
+    
+    if session_id not in sessions:
+        logger.error(f"Session not found: {session_id}")
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    state = sessions[session_id]
+    
+    # Read existing image data if available
+    image_data = {}
+    try:
+        image_output_path = os.path.join(os.path.dirname(__file__), "agents", "output", "image_generation_output.json")
+        if os.path.exists(image_output_path):
+            with open(image_output_path, "r", encoding="utf-8") as f:
+                image_data = json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not read image data: {e}")
+    
+    # Generate summary with image metadata (this will automatically save to business_summary.txt)
+    updated_state = generate_summary(state, include_image_metadata=True, image_data=image_data)
+    sessions[session_id] = updated_state  # Update the session with the summary
+    
+    if not updated_state.summary:
+        logger.error("Failed to generate summary")
+        raise HTTPException(status_code=500, detail="Failed to generate summary")
+    
+    response_data = SummaryResponse(summary=updated_state.summary)
+    logger.info(f"SUMMARY WITH IMAGE RESPONSE: Generated summary of length {len(updated_state.summary)}")
+    logger.info("=== END GET SUMMARY WITH IMAGE ===\n")
     
     return response_data
 

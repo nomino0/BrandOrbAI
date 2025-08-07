@@ -1,1 +1,29 @@
-[]
+[
+  {
+    "name": "Financial Forecasting Platform For Smes Solutions Inc.",
+    "description": "Leading provider of financial forecasting platform for smes services and solutions",
+    "city": "New York",
+    "email": "contact@financialforecastingplatformforsmessolutions.com",
+    "homepage": "https://financialforecastingplatformforsmes-solutions.com",
+    "logoUrl": "",
+    "phoneNumber": "+1-555-0123"
+  },
+  {
+    "name": "Global Financial Forecasting Platform For Smes Partners",
+    "description": "International network specializing in financial forecasting platform for smes industry partnerships",
+    "city": "San Francisco",
+    "email": "partnerships@globalfinancialforecastingplatformforsmes.com",
+    "homepage": "https://global-financialforecastingplatformforsmes.com",
+    "logoUrl": "",
+    "phoneNumber": "+1-555-0456"
+  },
+  {
+    "name": "Financial Forecasting Platform For Smes Connect Ltd.",
+    "description": "Connecting businesses in the financial forecasting platform for smes sector with growth opportunities",
+    "city": "Austin",
+    "email": "info@financialforecastingplatformforsmesconnect.com",
+    "homepage": "https://financialforecastingplatformforsmes-connect.com",
+    "logoUrl": "",
+    "phoneNumber": "+1-555-0789"
+  }
+]

@@ -15,7 +15,6 @@ import FinancialBreakdown from "@/components/dashboard/viability/FinancialBreakd
 import LegalAnalysis from "@/components/dashboard/viability/LegalAnalysis";
 import MarketAnalysis from "@/components/dashboard/viability/MarketAnalysis";
 import Competitors from "@/components/dashboard/viability/Competitors";
-import Opportunities from "@/components/dashboard/viability/Opportunities";
 
 // Type definitions
 interface FinancialData {
@@ -53,16 +52,6 @@ interface LegalData {
   recommendations: string[];
 }
 
-interface OpportunityData {
-  name: string;
-  description: string;
-  city: string;
-  email: string;
-  homepage: string;
-  logoUrl: string;
-  phoneNumber: string;
-}
-
 interface ViabilityData {
   overall_viability_score: number;
   market_opportunity_score: number;
@@ -97,87 +86,9 @@ export default function ViabilityAssessmentPage() {
   const [marketData, setMarketData] = useState<MarketData | null>(null);
   const [legalData, setLegalData] = useState<LegalData | null>(null);
   const [viabilityData, setViabilityData] = useState<ViabilityData | null>(null);
-  const [opportunitiesData, setOpportunitiesData] = useState<OpportunityData[] | null>(null);
   const [rawFinancial, setRawFinancial] = useState<string>("");
   const [rawMarket, setRawMarket] = useState<string>("");
   const [rawLegal, setRawLegal] = useState<string>("");
-
-  // Generate contextual opportunities based on business context
-  const generateContextualOpportunities = (context: any): OpportunityData[] => {
-    const industry = context.industry?.toLowerCase() || '';
-    const businessType = context.business_type?.toLowerCase() || '';
-    const location = context.location || 'Global';
-    
-    const opportunities: OpportunityData[] = [];
-    
-    if (industry.includes('health') || industry.includes('mental')) {
-      opportunities.push(
-        {
-          name: 'HealthTech Partners',
-          description: 'Leading healthcare technology platform for digital health solutions',
-          city: 'San Francisco',
-          email: 'partnerships@healthtech-partners.com',
-          homepage: 'https://healthtech-partners.com',
-          logoUrl: '',
-          phoneNumber: '+1-555-0123'
-        },
-        {
-          name: 'Wellness Connect',
-          description: 'Network of wellness providers and mental health professionals',
-          city: 'New York',
-          email: 'connect@wellness-connect.com',
-          homepage: 'https://wellness-connect.com',
-          logoUrl: '',
-          phoneNumber: '+1-555-0456'
-        }
-      );
-    } else if (industry.includes('financial') || industry.includes('fintech')) {
-      opportunities.push(
-        {
-          name: 'FinTech Solutions Hub',
-          description: 'Financial technology solutions and API integrations for SMEs',
-          city: 'Austin',
-          email: 'partnerships@fintech-hub.com',
-          homepage: 'https://fintech-solutions-hub.com',
-          logoUrl: '',
-          phoneNumber: '+1-555-0789'
-        },
-        {
-          name: 'Capital Connect',
-          description: 'Investment platform connecting startups with funding opportunities',
-          city: 'Chicago',
-          email: 'funding@capital-connect.com',
-          homepage: 'https://capital-connect.com',
-          logoUrl: '',
-          phoneNumber: '+1-555-0321'
-        }
-      );
-    } else {
-      // Generic business opportunities
-      opportunities.push(
-        {
-          name: 'Business Growth Partners',
-          description: `Strategic partnerships for ${businessType || 'business'} growth and expansion`,
-          city: 'Seattle',
-          email: 'growth@business-partners.com',
-          homepage: 'https://business-growth-partners.com',
-          logoUrl: '',
-          phoneNumber: '+1-555-0654'
-        },
-        {
-          name: 'Innovation Network',
-          description: 'Technology and innovation partnerships for emerging businesses',
-          city: 'Boston',
-          email: 'innovation@tech-network.com',
-          homepage: 'https://innovation-network.com',
-          logoUrl: '',
-          phoneNumber: '+1-555-0987'
-        }
-      );
-    }
-    
-    return opportunities;
-  };
 
   useEffect(() => {
     fetchAssessmentData();
@@ -187,12 +98,11 @@ export default function ViabilityAssessmentPage() {
     try {
       setLoading(true);
       
-      // Fetch all assessment data including viability assessment and opportunities
-      const [financial, market, legal, opportunities, viability] = await Promise.all([
+      // Fetch all assessment data including viability assessment
+      const [financial, market, legal, viability] = await Promise.all([
         getAgentOutput("financial_assessment"),
         getAgentOutput("market_analysis_competitors"),
         getAgentOutput("legal_analysis"),
-        getAgentOutput("opportunities"),
         getViabilityOutput().catch(() => ({ data: null })) // Allow viability to fail gracefully
       ]);
 
@@ -396,34 +306,6 @@ export default function ViabilityAssessmentPage() {
         setLegalData(null);
       }
 
-      // Parse opportunities data dynamically from the JSON content
-      try {
-        const opportunitiesContent = opportunities.output;
-        
-        // Try to parse as JSON array
-        const parsedOpportunities = JSON.parse(opportunitiesContent);
-        
-        if (Array.isArray(parsedOpportunities)) {
-          // Clean up the opportunities data for better display
-          const cleanedOpportunities = parsedOpportunities.map((opp: any) => ({
-            name: opp.name || 'Unknown Company',
-            description: opp.description || 'No description available',
-            city: opp.city || '',
-            email: opp.email || '',
-            homepage: opp.homepage || '',
-            logoUrl: opp.logoUrl || '',
-            phoneNumber: opp.phoneNumber || ''
-          }));
-          
-          setOpportunitiesData(cleanedOpportunities);
-        } else {
-          setOpportunitiesData(null);
-        }
-      } catch (opportunitiesError) {
-        console.error('Opportunities parsing failed:', opportunitiesError);
-        setOpportunitiesData(null);
-      }
-
       // Set viability data directly from backend
       if (viability.data) {
         setViabilityData(viability.data);
@@ -599,12 +481,6 @@ export default function ViabilityAssessmentPage() {
 
       {/* Competitors Sidebar */}
       <Competitors marketData={marketData} />
-
-      {/* Business Opportunities */}
-      <Opportunities 
-        opportunitiesData={opportunitiesData} 
-        businessContext={dynamicBusinessInfo}
-      />
     </div>
   );
 }

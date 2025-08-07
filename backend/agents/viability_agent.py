@@ -330,7 +330,9 @@ IMPORTANT: Return ONLY the JSON object above, no additional explanatory text."""
             business_summary = ""
             if os.path.exists(business_summary_path):
                 with open(business_summary_path, "r", encoding="utf-8") as f:
-                    business_summary = f.read()
+                    raw_summary = f.read()
+                    # Remove the "Generated on" date line for cleaner processing
+                    business_summary = raw_summary.split("\nGenerated on")[0] if "\nGenerated on" in raw_summary else raw_summary
             
             if not financial_data and not market_data and not legal_data:
                 return {
