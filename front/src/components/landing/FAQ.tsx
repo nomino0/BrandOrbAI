@@ -96,7 +96,7 @@ export default function FAQ() {
             <Button className="px-8 py-3 font-medium">
               <span className="text-white">Get Started</span>
             </Button>
-            <Button variant="outline" className="px-8 py-3 font-medium">
+            <Button variant="outline" className=" bg-surface  px-8 py-3 font-medium">
               Schedule Demo
             </Button>
           </div>

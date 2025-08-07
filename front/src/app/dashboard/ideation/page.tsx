@@ -8,8 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { ButtomBar } from "@/components/dashboard/ButtomBar";
+import { toast } from "sonner";
 import clsx from "clsx";
-import Lottie from "lottie-react";
 
 // Dynamically import react-markdown to avoid SSR issues
 const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false });
@@ -165,7 +165,7 @@ export default function IdeationPage() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [sparklesData, setSparklesData] = useState<any>(null);
+  const [imageGenerationAttempted, setImageGenerationAttempted] = useState(false);
   const router = useRouter();
 
   const savedSummary = typeof window !== 'undefined' ? localStorage.getItem('brandorb_summary') : null;
@@ -175,17 +175,35 @@ export default function IdeationPage() {
   useEffect(() => { 
     setMounted(true); 
     
-    // Load the sparkles animation
+    // Check if validation has already been done by checking if all 3 steps are completed
     if (typeof window !== 'undefined') {
-      fetch('/sparkles_loop_loader.lottie')
-        .then(response => response.json())
-        .then(data => setSparklesData(data))
-        .catch(error => console.error('Error loading sparkles animation:', error));
-    }
-    
-    // Check if validation has already been done
-    if (typeof window !== 'undefined') {
-      setValidated(sessionStorage.getItem('brandorb_validated') === 'true');
+      // Check if all 3 steps have been completed successfully
+      const financialData = localStorage.getItem('brandorb_financial_data');
+      const marketData = localStorage.getItem('brandorb_market_data');
+      const swotData = localStorage.getItem('brandorb_swot_data');
+      const bmcData = localStorage.getItem('brandorb_bmc_data');
+      
+      console.log('Validation check:', {
+        financialData: !!financialData,
+        marketData: !!marketData,
+        swotData: !!swotData,
+        bmcData: !!bmcData,
+        savedSummary: !!savedSummary,
+        savedBusinessIdea: !!savedBusinessIdea
+      });
+      
+      // Validation is complete when we have all 3 main data sets
+      const allStepsCompleted = financialData && marketData && swotData && bmcData;
+      setValidated(!!allStepsCompleted);
+      
+      console.log('Validate button should be visible:', !allStepsCompleted && savedSummary && savedBusinessIdea);
+      
+      // Also check legacy session storage for backward compatibility
+      const legacyValidated = sessionStorage.getItem('brandorb_validated') === 'true';
+      if (legacyValidated && !allStepsCompleted) {
+        // Legacy validation flag exists but data is missing - reset the flag
+        sessionStorage.removeItem('brandorb_validated');
+      }
       
       // Check for existing image from multiple sources in priority order
       const checkForExistingImage = () => {
@@ -255,6 +273,10 @@ export default function IdeationPage() {
             }
           } catch (error) {
             console.error('Error parsing run-all data:', error);
+            toast.error("Data Parsing Error", {
+              description: "Unable to parse business analysis data. Some features may not work correctly.",
+              duration: 4000,
+            });
           }
           
           // 3. Fourth priority: Legacy - check old business-idea-based cache
@@ -270,9 +292,10 @@ export default function IdeationPage() {
             return;
           }
           
-          // 4. No existing image found - need to generate one
-          if (!backgroundImage && !imageLoading) {
+          // 4. No existing image found - need to generate one (only if not already attempted)
+          if (!backgroundImage && !imageLoading && !imageGenerationAttempted) {
             console.log('No existing image found, generating new one...');
+            setImageGenerationAttempted(true);
             generateNewImage();
           }
         });
@@ -280,7 +303,7 @@ export default function IdeationPage() {
       
       // Generate a new image when no cached version exists
       const generateNewImage = async () => {
-        if (savedSummary && savedBusinessIdea && !backgroundImage && !imageLoading) {
+        if (savedSummary && savedBusinessIdea && !backgroundImage && !imageLoading && !imageGenerationAttempted) {
           setImageLoading(true);
           setImageError(null);
           try {
@@ -357,14 +380,43 @@ export default function IdeationPage() {
       
       // Start the image checking process
       checkForExistingImage();
+      
+      // Listen for changes in localStorage to detect validation completion
+      const handleStorageChange = () => {
+        const financialData = localStorage.getItem('brandorb_financial_data');
+        const marketData = localStorage.getItem('brandorb_market_data');
+        const swotData = localStorage.getItem('brandorb_swot_data');
+        const bmcData = localStorage.getItem('brandorb_bmc_data');
+        
+        const allStepsCompleted = financialData && marketData && swotData && bmcData;
+        if (allStepsCompleted && !validated) {
+          console.log('Validation completed detected via localStorage');
+          setValidated(true);
+          sessionStorage.setItem('brandorb_validated', 'true');
+        }
+      };
+      
+      // Listen for storage events
+      window.addEventListener('storage', handleStorageChange);
+      
+      // Also check periodically in case storage events don't fire (same-origin issue)
+      const storageCheckInterval = setInterval(handleStorageChange, 1000);
+      
+      // Cleanup listeners
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        clearInterval(storageCheckInterval);
+      };
     }
     
     // Cleanup function to revoke blob URLs (base64 data doesn't need cleanup)
-    return () => {
+    const cleanup = () => {
       if (backgroundImage && backgroundImage.startsWith('blob:')) {
         URL.revokeObjectURL(backgroundImage);
       }
     };
+
+    return cleanup;
   }, [savedSummary, savedBusinessIdea]); // Remove backgroundImage and imageLoading from dependencies to prevent loops
 
   // Clean up the summary to remove unwanted sections
@@ -386,38 +438,30 @@ export default function IdeationPage() {
   }, [savedSummary]);
 
   const handleValidate = useCallback(async () => {
-    if (!savedBusinessIdea) return;
-    
-    setValidating(true);
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
-      const response = await fetch(`${backendUrl}/run-all`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ business_idea: savedBusinessIdea }),
-      });
-      
-      if (response.ok) {
-        // Save the complete run-all response for image retrieval
-        const runResponse = await response.json();
-        
-        // Store both the response and the state data
-        localStorage.setItem('brandorb_run_data', JSON.stringify(runResponse));
-        if (runResponse.data) {
-          localStorage.setItem('brandorb_run_state', JSON.stringify(runResponse.data));
-        }
-        
-        // Update validation state
-        sessionStorage.setItem('brandorb_validated', 'true');
-        setValidated(true);
-        router.push('/dashboard/critical-report');
-      }
-    } catch (error) {
-      console.error('Validation failed:', error);
-    } finally {
-      setValidating(false);
-    }
-  }, [savedBusinessIdea, router]);
+    // This will be handled by the ButtomBar component
+    console.log('Validation started via ButtomBar');
+  }, []);
+
+  const clearValidationData = useCallback(() => {
+    // Clear all validation-related data for testing
+    localStorage.removeItem('brandorb_financial_data');
+    localStorage.removeItem('brandorb_market_data');
+    localStorage.removeItem('brandorb_swot_data');
+    localStorage.removeItem('brandorb_bmc_data');
+    localStorage.removeItem('brandorb_run_data');
+    localStorage.removeItem('brandorb_run_state');
+    sessionStorage.removeItem('brandorb_validated');
+    setValidated(false);
+    console.log('Validation data cleared');
+  }, []);
+
+  const handleValidationComplete = useCallback(() => {
+    // Called when all validation steps are completed
+    console.log('All validation steps completed!');
+    setValidated(true);
+    // Optionally set a flag in sessionStorage for persistence
+    sessionStorage.setItem('brandorb_validated', 'true');
+  }, []);
 
   const blocks = useMemo(() => (savedSummary ? parseSummaryToBlocks(savedSummary) : []), [savedSummary]);
   
@@ -476,7 +520,14 @@ export default function IdeationPage() {
                   {/* Skeleton loading state */}
                   {imageLoading && (
                     <div className="absolute inset-0 bg-muted/50">
-                      <Skeleton className="w-full h-full rounded-none" />
+                      <div role="status" className="w-full h-full p-4 border border-gray-200 rounded-sm shadow-sm animate-pulse md:p-6 dark:border-gray-700">
+                        <div className="flex items-center justify-center h-full mb-4 bg-gray-300 rounded-sm dark:bg-gray-700">
+                          <svg className="w-10 h-10 text-gray-200 dark:text-gray-600" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 20">
+                            <path d="M14.066 0H7v5a2 2 0 0 1-2 2H0v11a1.97 1.97 0 0 0 1.934 2h12.132A1.97 1.97 0 0 0 16 18V2a1.97 1.97 0 0 0-1.934-2ZM10.5 6a1.5 1.5 0 1 1 0 2.999A1.5 1.5 0 0 1 10.5 6Zm2.221 10.515a1 1 0 0 1-.858.485h-8a1 1 0 0 1-.9-1.43L5.6 10.039a.978.978 0 0 1 .936-.57 1 1 0 0 1 .9.632l1.181 2.981.541-1a.945.945 0 0 1 .883-.522 1 1 0 0 1 .879.529l1.832 3.438a1 1 0 0 1-.031.988Z"/>
+                            <path d="M5 5V.13a2.96 2.96 0 0 0-1.293.749L.879 3.707A2.98 2.98 0 0 0 .13 5H5Z"/>
+                          </svg>
+                        </div>
+                      </div>
                     </div>
                   )}
                   
@@ -495,19 +546,11 @@ export default function IdeationPage() {
                     </p>
                   </div>
                   
-                  {/* Sparkles loading animation */}
+                  {/* Loading animation */}
                   {imageLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/5 dark:bg-white/5">
                       <div className="flex flex-col items-center space-y-2">
-                        {sparklesData ? (
-                          <Lottie 
-                            animationData={sparklesData} 
-                            style={{ width: 40, height: 40 }}
-                            loop={true}
-                          />
-                        ) : (
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                        )}
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                         <p className="text-xs text-muted-foreground animate-pulse">
                           Generating background...
                         </p>
@@ -528,6 +571,7 @@ export default function IdeationPage() {
                           onClick={() => {
                             setImageError(null);
                             setBackgroundImage(null);
+                            setImageGenerationAttempted(false); // Reset the flag to allow retry
                             // Trigger regeneration with updated caching system
                             const generateImage = async () => {
                               if (savedSummary && savedBusinessIdea) {
@@ -607,12 +651,14 @@ export default function IdeationPage() {
                       em: ({ children }) => <em className="italic text-foreground">{children}</em>,
                       
                       // GitHub-style code
-                      code: ({ children, inline }) => 
-                        inline ? (
+                      code: ({ children, ...props }) => {
+                        const isInline = !props.className?.includes('language-');
+                        return isInline ? (
                           <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground">{children}</code>
                         ) : (
                           <code className="block bg-muted p-3 rounded-md text-sm font-mono text-foreground overflow-x-auto">{children}</code>
-                        ),
+                        );
+                      },
                       
                       // GitHub-style blockquotes
                       blockquote: ({ children }) => (
@@ -640,6 +686,7 @@ export default function IdeationPage() {
             <ButtomBar 
               showValidate={!validated} 
               onValidate={handleValidate}
+              onValidationComplete={handleValidationComplete}
             />
           </div>
         </>

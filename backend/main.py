@@ -21,7 +21,8 @@ from agents.marketAnalysis_competitors_Agents import run_market_analysis_competi
 from agents.opportunities_agent import run_opportunities_agent
 from agents.bmc_agent import extract_bmc_parts, read_multiple_files
 from agents.image_agent import run_image_generation_agent
-from agents.swot_agent import SWOTAgent
+from agents.swot_agent import SWOTAgent, run_swot_agent
+from agents.viability_agent import run_viability_assessment
 
 # Import ideation agents
 from agents.ideation_structs import State, QuestionEntry
@@ -180,43 +181,13 @@ async def run_all_agents(request: RunRequest):
         # Opportunities
         state.partners_suppliers_investors = run_opportunities_agent(state.business_idea)
         
-        # Generate background image as part of the workflow
-        try:
-            logger.info(f"Generating background image for business idea: {request.business_idea}")
-            
-            # Create a business summary from all agent outputs for image generation
-            summary_parts = []
-            if state.financial_assessment:
-                summary_parts.append("Financial assessment completed")
-            if state.legal_analysis:
-                summary_parts.append("Legal analysis completed")
-            if state.market_analysis:
-                summary_parts.append("Market analysis completed")
-            if state.partners_suppliers_investors:
-                summary_parts.append("Opportunities analysis completed")
-            
-            business_summary = f"Business plan for {request.business_idea}. Analysis includes: {', '.join(summary_parts)}"
-            
-            image_result = run_image_generation_agent(business_summary, request.business_idea)
-            
-            if image_result["status"] == "success":
-                state.background_image = image_result
-                logger.info(f"Successfully generated background image for business: {request.business_idea}")
-            else:
-                logger.warning(f"Image generation failed: {image_result.get('error', 'Unknown error')}")
-                state.background_image = {"status": "error", "error": image_result.get('error', 'Unknown error')}
-                
-        except Exception as image_error:
-            logger.error(f"Error during image generation: {str(image_error)}")
-            state.background_image = {"status": "error", "error": str(image_error)}
-        
         runs[run_id] = state.to_dict()
         
-        # Return the complete state including image data for frontend access
+        # Return the complete state without image generation (handled separately by frontend)
         return {
             "message": "done", 
             "run_id": run_id,
-            "data": state.to_dict()  # Include all state data including background_image
+            "data": state.to_dict()
         }
     
     except Exception as e:
@@ -377,6 +348,69 @@ async def serve_image(filename: str):
     )
 
 # =============================================================================
+# VIABILITY ASSESSMENT ENDPOINTS
+# =============================================================================
+
+@app.post("/save-business-summary")
+async def save_business_summary(request: dict):
+    """Save business summary for use by other agents"""
+    try:
+        business_summary = request.get("summary", "")
+        if not business_summary:
+            raise HTTPException(status_code=400, detail="Business summary is required")
+        
+        # Save to output directory
+        output_dir = os.path.join(os.path.dirname(__file__), "agents", "output")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        summary_path = os.path.join(output_dir, "business_summary.txt")
+        with open(summary_path, "w", encoding="utf-8") as f:
+            f.write(business_summary)
+        
+        logger.info(f"Business summary saved to: {summary_path}")
+        return {"message": "Business summary saved successfully", "path": summary_path}
+        
+    except Exception as e:
+        logger.error(f"Error saving business summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save business summary: {str(e)}")
+
+@app.post("/run-viability")
+async def run_viability_analysis():
+    """Generate comprehensive viability assessment based on existing agent outputs"""
+    try:
+        logger.info("Starting viability assessment")
+        
+        # Run viability assessment
+        result = run_viability_assessment()
+        
+        if result.get("success", False):
+            logger.info("Viability assessment completed successfully")
+            return {"message": "Viability assessment completed", "status": "success", "data": result.get("data")}
+        else:
+            logger.error(f"Viability assessment failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(status_code=500, detail=f"Viability assessment failed: {result.get('error', 'Unknown error')}")
+            
+    except Exception as e:
+        logger.error(f"Error in viability assessment endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Viability assessment failed: {str(e)}")
+
+@app.get("/viability-output")
+async def get_viability_output():
+    """Get the latest viability assessment output"""
+    output_path = os.path.join(os.path.dirname(__file__), "agents", "output", "viability_assessment_output.json")
+    
+    if not os.path.exists(output_path):
+        raise HTTPException(status_code=404, detail="No viability assessment output found")
+    
+    try:
+        with open(output_path, "r", encoding="utf-8") as f:
+            content = json.load(f)
+        return {"data": content}
+    except Exception as e:
+        logger.error(f"Error reading viability output: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to read viability output")
+
+# =============================================================================
 # SWOT ANALYSIS ENDPOINTS
 # =============================================================================
 
@@ -386,15 +420,22 @@ async def run_swot_analysis():
     try:
         logger.info("Starting SWOT analysis")
         
-        # Create SWOT agent instance
-        swot_agent = SWOTAgent()
+        # Read business summary for the business idea
+        business_idea = ""
+        business_summary_path = os.path.join(os.path.dirname(__file__), "agents", "output", "business_summary.txt")
+        if os.path.exists(business_summary_path):
+            with open(business_summary_path, "r", encoding="utf-8") as f:
+                business_idea = f.read()[:200]  # Get first 200 chars as business idea
+        else:
+            # Fallback: generic description
+            business_idea = "Digital business platform"
         
-        # Generate SWOT analysis
-        result = swot_agent.generate_swot_analysis()
+        # Run complete SWOT analysis
+        result = run_swot_agent(business_idea)
         
-        if result.get("success", False):
+        if result.get("status") == "success":
             logger.info("SWOT analysis completed successfully")
-            return {"message": "SWOT analysis completed", "status": "success"}
+            return {"message": "SWOT analysis completed", "status": "success", "data": result}
         else:
             logger.error(f"SWOT analysis failed: {result.get('error', 'Unknown error')}")
             raise HTTPException(status_code=500, detail=f"SWOT analysis failed: {result.get('error', 'Unknown error')}")
@@ -402,14 +443,28 @@ async def run_swot_analysis():
     except Exception as e:
         logger.error(f"Error in SWOT analysis endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"SWOT analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SWOT analysis failed: {str(e)}")
 
 @app.get("/swot-output")
 async def get_swot_output():
     """Get the latest SWOT analysis output"""
+    # Try to read from the complete JSON file first
+    complete_path = os.path.join(os.path.dirname(__file__), "agents", "output", "swot_complete.json")
+    
+    if os.path.exists(complete_path):
+        try:
+            with open(complete_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Return the SWOT analysis data directly
+            return {"content": data.get("swot_analysis", {})}
+        except Exception as e:
+            logger.error(f"Error reading SWOT complete file: {str(e)}")
+    
+    # Fallback: try the old format
     output_path = os.path.join(os.path.dirname(__file__), "agents", "output", "swot_output.txt")
     
     if not os.path.exists(output_path):
-        raise HTTPException(status_code=404, detail="No SWOT analysis output found")
+        raise HTTPException(status_code=404, detail="No SWOT analysis output found. Please run SWOT analysis first.")
     
     try:
         with open(output_path, "r", encoding="utf-8") as f:

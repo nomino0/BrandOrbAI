@@ -81,100 +81,114 @@ export default function BMCPage() {
       )}
 
       {!loading && (
-        <>
-          {/* Main BMC grid */}
-          <div className="w-full max-w-7xl px-2 md:px-0 mx-auto grid grid-cols-1 md:grid-cols-6 grid-rows-[repeat(2,minmax(180px,1fr))] gap-4 mb-6">
-            {/* Key Partners */}
-            <div className="md:row-span-2 flex flex-col h-full">
+        <div className="w-full max-w-7xl px-2 md:px-0 mx-auto space-y-8">
+          {/* Main BMC grid - 5 columns, 2 rows */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 min-h-[600px]">
+            {/* Key Partners - spans 2 rows */}
+            <div className="md:row-span-2">
               <BMCBlock
-                title={topBlocks[0]?.title}
-                question={topBlocks[0]?.question}
-                content={topBlocks[0]?.content}
-                color={topBlocks[0]?.color}
-                className="h-full min-h-[380px]"
-              />
-            </div>
-
-            {/* Key Activities */}
-            <div className="flex flex-col h-full">
-              <BMCBlock
-                title={topBlocks[1]?.title}
-                question={topBlocks[1]?.question}
-                content={topBlocks[1]?.content}
-                color={topBlocks[1]?.color}
+                title="Key Partners"
+                question={bmcQuestions["Key Partners"]}
+                content={bmcData["Key Partners"] || ""}
+                color="yellow"
                 className="h-full"
+                isGrid={true}
               />
             </div>
 
-            {/* Value Propositions */}
-            <div className="md:row-span-2 flex flex-col h-full">
+            {/* Key Activities - row 1 */}
+            <div>
               <BMCBlock
-                title={topBlocks[3]?.title}
-                question={topBlocks[3]?.question}
-                content={topBlocks[3]?.content}
-                color={topBlocks[3]?.color}
-                className="h-full min-h-[380px]"
-              />
-            </div>
-
-            {/* Customer Relationships */}
-            <div className="flex flex-col h-full">
-              <BMCBlock
-                title={topBlocks[4]?.title}
-                question={topBlocks[4]?.question}
-                content={topBlocks[4]?.content}
-                color={topBlocks[4]?.color}
+                title="Key Activities"
+                question={bmcQuestions["Key Activities"]}
+                content={bmcData["Key Activities"] || ""}
+                color="purple"
                 className="h-full"
+                isGrid={true}
               />
             </div>
 
-            {/* Customer Segments */}
-            <div className="md:row-span-2 flex flex-col h-full">
+            {/* Value Propositions - spans 2 rows */}
+            <div className="md:row-span-2">
               <BMCBlock
-                title={topBlocks[6]?.title}
-                question={topBlocks[6]?.question}
-                content={topBlocks[6]?.content}
-                color={topBlocks[6]?.color}
-                className="h-full min-h-[380px]"
-              />
-            </div>
-
-            {/* Key Resources */}
-            <div className="flex flex-col h-full">
-              <BMCBlock
-                title={topBlocks[2]?.title}
-                question={topBlocks[2]?.question}
-                content={topBlocks[2]?.content}
-                color={topBlocks[2]?.color}
+                title="Value Propositions"
+                question={bmcQuestions["Value Propositions"]}
+                content={bmcData["Value Propositions"] || ""}
+                color="blue"
                 className="h-full"
+                isGrid={true}
               />
             </div>
 
-            {/* Channels */}
-            <div className="flex flex-col h-full">
+            {/* Customer Relationships - row 1 */}
+            <div>
               <BMCBlock
-                title={topBlocks[5]?.title}
-                question={topBlocks[5]?.question}
-                content={topBlocks[5]?.content}
-                color={topBlocks[5]?.color}
+                title="Customer Relationships"
+                question={bmcQuestions["Customer Relationships"]}
+                content={bmcData["Customer Relationships"] || ""}
+                color="pink"
                 className="h-full"
+                isGrid={true}
+              />
+            </div>
+
+            {/* Customer Segments - spans 2 rows */}
+            <div className="md:row-span-2">
+              <BMCBlock
+                title="Customer Segments"
+                question={bmcQuestions["Customer Segments"]}
+                content={bmcData["Customer Segments"] || ""}
+                color="orange"
+                className="h-full"
+                isGrid={true}
+              />
+            </div>
+
+            {/* Key Resources - row 2 */}
+            <div>
+              <BMCBlock
+                title="Key Resources"
+                question={bmcQuestions["Key Resources"]}
+                content={bmcData["Key Resources"] || ""}
+                color="yellow"
+                className="h-full"
+                isGrid={true}
+              />
+            </div>
+
+            {/* Channels - row 2 */}
+            <div>
+              <BMCBlock
+                title="Channels"
+                question={bmcQuestions["Channels"]}
+                content={bmcData["Channels"] || ""}
+                color="purple"
+                className="h-full"
+                isGrid={true}
               />
             </div>
           </div>
 
-          {/* Bottom blocks grid */}
-          <div className="w-full max-w-7xl px-2 md:px-0 mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-            {bottomBlocks.map((block, index) => (
-              <BMCBlock
-                key={block.title}
-                title={block.title}
-                question={block.question}
-                content={block.content}
-                color={block.color}
-              />
-            ))}
+          {/* Cost Structure & Revenue Streams - 2 columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-64">
+            <BMCBlock
+              title="Cost Structure"
+              question={bmcQuestions["Cost Structure"]}
+              content={bmcData["Cost Structure"] || ""}
+              color="blue"
+              className="h-full"
+              isGrid={true}
+            />
+            <BMCBlock
+              title="Revenue Streams"
+              question={bmcQuestions["Revenue Streams"]}
+              content={bmcData["Revenue Streams"] || ""}
+              color="pink"
+              className="h-full"
+              isGrid={true}
+            />
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -186,6 +200,7 @@ type BMCBlockProps = {
   content?: string;
   color?: keyof typeof noteColors;
   className?: string;
+  isGrid?: boolean;
 };
 
 function BMCBlock({
@@ -194,6 +209,7 @@ function BMCBlock({
   content,
   color = "yellow",
   className,
+  isGrid = false,
 }: BMCBlockProps) {
   if (!title) {
     return (
@@ -201,6 +217,30 @@ function BMCBlock({
         <CardContent className="flex items-center justify-center h-full">
           <div className="text-muted-foreground text-sm">Loading...</div>
         </CardContent>
+      </Card>
+    );
+  }
+
+  if (isGrid) {
+    return (
+      <Card className={clsx("h-full rounded-xl shadow-sm border border-border bg-card", className)}>
+        <div className="p-6 h-full flex flex-col">
+          <h3 className="font-semibold text-foreground mb-3">{title}</h3>
+          <p className="text-sm text-muted-foreground mb-4">{question}</p>
+          <div className="flex-1 overflow-y-auto">
+            {content ? (
+              <div className={`p-4 rounded-xl ${noteColors[color]} mb-3 shadow-sm`}>
+                <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
+                  <ReactMarkdown>{content}</ReactMarkdown>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-muted text-muted-foreground text-sm shadow-sm">
+                No data available
+              </div>
+            )}
+          </div>
+        </div>
       </Card>
     );
   }

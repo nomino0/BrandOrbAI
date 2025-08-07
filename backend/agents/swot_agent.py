@@ -11,7 +11,7 @@ class SWOTAgent:
         self.output_dir = os.path.join(os.path.dirname(__file__), "output")
         
     def read_agent_outputs(self) -> Dict[str, str]:
-        """Read all agent output files"""
+        """Read all agent output files including business summary"""
         file_contents = {}
         
         # Define the output files to read
@@ -19,7 +19,8 @@ class SWOTAgent:
             "financial_assessment": "assessment_output.txt",
             "legal_analysis": "legal_output.txt",
             "market_analysis": "market_analysis_competitors_output.txt",
-            "opportunities": "opportunities_output.txt"
+            "opportunities": "opportunities_output.txt",
+            "business_summary": "business_summary.txt"
         }
         
         for agent_name, filename in output_files.items():
@@ -38,13 +39,21 @@ class SWOTAgent:
         return file_contents
     
     def generate_swot_analysis(self, business_idea: str, file_contents: Dict[str, str]) -> Dict[str, List[str]]:
-        """Generate SWOT analysis using Groq LLM"""
+        """Generate SWOT analysis using Groq LLM with business summary context"""
         if not os.getenv("GROQ_API_KEY"):
             raise ValueError("GROQ_API_KEY not configured")
         
-        # Combine all analysis content
+        # Get business summary for better context
+        business_summary = file_contents.get("business_summary", "")
+        
+        # Combine all analysis content with emphasis on business summary
         combined_analysis = f"""
-        Business Idea: {business_idea}
+        BUSINESS IDEA: {business_idea}
+        
+        BUSINESS SUMMARY & CONTEXT:
+        {business_summary}
+        
+        SUPPORTING ANALYSIS DATA:
         
         Financial Assessment:
         {file_contents.get("financial_assessment", "No financial assessment available")}
@@ -60,9 +69,17 @@ class SWOTAgent:
         """
         
         swot_prompt = f"""
-        Based on the comprehensive business analysis provided, generate a detailed SWOT analysis.
+        Based on the comprehensive business analysis provided, generate a detailed SWOT analysis for this SPECIFIC business.
         
         {combined_analysis}
+        
+        IMPORTANT: Base your analysis on the actual business details from the Business Summary section. Extract specific information about:
+        - Budget and financial constraints
+        - Target market and demographics  
+        - Product/service category
+        - Business model and operations
+        - Geographic market
+        - Competition level
         
         Return ONLY a JSON object in this exact format:
         {{
@@ -73,13 +90,14 @@ class SWOTAgent:
         }}
         
         Guidelines:
-        - Strengths: Internal positive factors, competitive advantages, unique capabilities
-        - Weaknesses: Internal limitations, areas for improvement, resource constraints
-        - Opportunities: External positive factors, market trends, growth potential
-        - Threats: External risks, competitive pressures, market challenges
+        - Strengths: Internal positive factors, competitive advantages, unique capabilities specific to this business
+        - Weaknesses: Internal limitations, areas for improvement, resource constraints based on actual budget
+        - Opportunities: External positive factors, market trends, growth potential in the target market
+        - Threats: External risks, competitive pressures, market challenges specific to the industry
         - Provide exactly 5 specific, actionable items per category
-        - Base analysis on the provided business analysis content
+        - Base analysis on the actual business context from the summary
         - Be specific and avoid generic statements
+        - Consider the actual budget and scale mentioned in the business summary
         """
         
         try:

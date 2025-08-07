@@ -4,7 +4,68 @@ export interface AgentOutput {
   output: string;
 }
 
+export interface WorkflowStatus {
+  ideation: 'completed' | 'available' | 'in_progress' | 'locked';
+  viability_assessment: 'completed' | 'available' | 'in_progress' | 'locked';
+  swot_analysis: 'completed' | 'available' | 'in_progress' | 'locked';
+  bmc: 'completed' | 'available' | 'in_progress' | 'locked';
+  brand_identity: 'completed' | 'available' | 'in_progress' | 'locked';
+  marketing_strategy: 'completed' | 'available' | 'in_progress' | 'locked';
+  pitch_deck: 'completed' | 'available' | 'in_progress' | 'locked';
+}
+
+// Workflow Management
+export async function getWorkflowStatus(): Promise<WorkflowStatus> {
+  // Get from localStorage or default to initial state
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('brandorb_workflow_status');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  }
+  
+  return {
+    ideation: 'completed', // Ideation is always completed since user finished onboarding
+    viability_assessment: 'locked',
+    swot_analysis: 'locked',
+    bmc: 'locked',
+    brand_identity: 'locked',
+    marketing_strategy: 'locked',
+    pitch_deck: 'locked',
+  };
+}
+
+export function updateWorkflowStatus(status: Partial<WorkflowStatus>): void {
+  if (typeof window !== 'undefined') {
+    const current = JSON.parse(localStorage.getItem('brandorb_workflow_status') || '{}');
+    const updated = { ...current, ...status };
+    localStorage.setItem('brandorb_workflow_status', JSON.stringify(updated));
+    
+    // Dispatch custom event to notify components
+    window.dispatchEvent(new CustomEvent('workflowUpdated'));
+  }
+}
+
+export function markStepAsCompleted(step: keyof WorkflowStatus): void {
+  if (typeof window !== 'undefined') {
+    const current = JSON.parse(localStorage.getItem('brandorb_workflow_status') || '{}');
+    
+    // Only mark as completed if it's currently available
+    if (current[step] === 'available') {
+      current[step] = 'completed';
+      localStorage.setItem('brandorb_workflow_status', JSON.stringify(current));
+      
+      // Dispatch custom event to notify components
+      window.dispatchEvent(new CustomEvent('workflowUpdated'));
+    }
+  }
+}
+
 export async function runAllAgents(businessIdea: string): Promise<{ message: string }> {
+  if (!businessIdea.trim()) {
+    throw new Error('Business idea is required');
+  }
+
   const response = await fetch(`${BACKEND_URL}/run-all`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -12,20 +73,38 @@ export async function runAllAgents(businessIdea: string): Promise<{ message: str
   });
   
   if (!response.ok) {
-    throw new Error('Failed to run agents');
+    const errorText = await response.text();
+    throw new Error(`Failed to run agents: ${response.status} - ${errorText}`);
   }
   
-  return response.json();
+  const result = await response.json();
+  
+  if (!result || result.message !== 'done') {
+    throw new Error('Agents execution did not complete successfully');
+  }
+  
+  return result;
 }
 
 export async function getAgentOutput(agent: string): Promise<AgentOutput> {
+  if (!agent) {
+    throw new Error('Agent name is required');
+  }
+
   const response = await fetch(`${BACKEND_URL}/agent-output?agent=${agent}`);
   
   if (!response.ok) {
-    throw new Error(`Failed to get output for agent: ${agent}`);
+    const errorText = await response.text();
+    throw new Error(`Failed to get output for agent: ${agent} - ${response.status} - ${errorText}`);
   }
   
-  return response.json();
+  const result = await response.json();
+  
+  if (!result || !result.output) {
+    throw new Error(`No output received from agent: ${agent}`);
+  }
+  
+  return result;
 }
 
 export async function runBMCExtraction(): Promise<{ status: string }> {
@@ -34,20 +113,34 @@ export async function runBMCExtraction(): Promise<{ status: string }> {
   });
   
   if (!response.ok) {
-    throw new Error('Failed to run BMC extraction');
+    const errorText = await response.text();
+    throw new Error(`Failed to run BMC extraction: ${response.status} - ${errorText}`);
   }
   
-  return response.json();
+  const result = await response.json();
+  
+  if (!result || !result.status) {
+    throw new Error('BMC extraction did not complete successfully');
+  }
+  
+  return result;
 }
 
 export async function getBMCOutput(): Promise<string> {
   const response = await fetch(`${BACKEND_URL}/bmc/output`);
   
   if (!response.ok) {
-    throw new Error('Failed to get BMC output');
+    const errorText = await response.text();
+    throw new Error(`Failed to get BMC output: ${response.status} - ${errorText}`);
   }
   
-  return response.text();
+  const result = await response.text();
+  
+  if (!result || result.trim().length === 0) {
+    throw new Error('No BMC output received');
+  }
+  
+  return result;
 }
 
 export async function runSWOTAnalysis(): Promise<{ message: string; status: string }> {
@@ -56,33 +149,234 @@ export async function runSWOTAnalysis(): Promise<{ message: string; status: stri
   });
   
   if (!response.ok) {
-    throw new Error('Failed to run SWOT analysis');
+    const errorText = await response.text();
+    throw new Error(`Failed to run SWOT analysis: ${response.status} - ${errorText}`);
+  }
+  
+  const result = await response.json();
+  
+  if (!result || result.status !== 'success') {
+    throw new Error('SWOT analysis did not complete successfully');
+  }
+  
+  return result;
+}
+
+export async function saveBusinessSummary(summary: string): Promise<{ message: string }> {
+  const response = await fetch(`${BACKEND_URL}/save-business-summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ summary }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to save business summary: ${response.status} - ${errorText}`);
   }
   
   return response.json();
 }
 
-export async function getSWOTOutput(): Promise<{ content: string }> {
+export async function runViabilityAssessment(): Promise<{ message: string; status: string; data: any }> {
+  const response = await fetch(`${BACKEND_URL}/run-viability`, {
+    method: 'POST',
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to run viability assessment: ${response.status} - ${errorText}`);
+  }
+  
+  const result = await response.json();
+  
+  if (!result || result.status !== 'success') {
+    throw new Error('Viability assessment did not complete successfully');
+  }
+  
+  return result;
+}
+
+export async function getViabilityOutput(): Promise<{ data: any }> {
+  const response = await fetch(`${BACKEND_URL}/viability-output`);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to get viability output: ${response.status} - ${errorText}`);
+  }
+  
+  const result = await response.json();
+  
+  if (!result || !result.data) {
+    throw new Error('No viability assessment data received');
+  }
+  
+  return result;
+}
+
+export async function getSWOTOutput(): Promise<{ content: any }> {
   const response = await fetch(`${BACKEND_URL}/swot-output`);
   
   if (!response.ok) {
-    throw new Error('Failed to get SWOT output');
+    const errorText = await response.text();
+    throw new Error(`Failed to get SWOT output: ${response.status} - ${errorText}`);
   }
   
-  return response.json();
+  const result = await response.json();
+  
+  if (!result || !result.content) {
+    throw new Error('No SWOT output received');
+  }
+  
+  return result;
 }
 
 // Helper functions to parse specific outputs
 export function parseFinancialAssessment(output: string) {
   try {
     // Try to parse as JSON first
-    const jsonMatch = output.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    let jsonData: any = null;
+    
+    // Handle markdown code blocks
+    let cleanOutput = output;
+    if (output.includes("```")) {
+      const jsonMatch = output.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        cleanOutput = jsonMatch[1];
+      }
     }
-    return { text: output };
-  } catch {
-    return { text: output };
+    
+    // Try to parse the cleaned output
+    try {
+      jsonData = JSON.parse(cleanOutput);
+    } catch {
+      // If that fails, try to find JSON within the text
+      const jsonMatch = cleanOutput.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonData = JSON.parse(jsonMatch[0]);
+      }
+    }
+    
+    if (jsonData) {
+      // Extract financial assessment data from structured JSON
+      const fa = jsonData.financial_assessment || jsonData;
+      
+      const startupCosts = parseInt(fa.estimated_initial_funding?.amount || 
+                                   fa.funding_breakdown?.reduce((sum: number, item: any) => 
+                                     sum + parseInt(item.amount || 0), 0) || 0);
+      
+      const monthlyExpenses = parseInt(fa.estimated_monthly_burn_rate?.amount || 
+                                      fa.cost_breakdown_monthly?.reduce((sum: number, item: any) => 
+                                        sum + parseInt(item.amount || 0), 0) || 0);
+      
+      const breakEvenMonths = parseInt(fa.estimated_time_to_break_even_months?.months || 0);
+      
+      const profitMargin = fa.three_year_projections ? 
+        (parseFloat(fa.three_year_projections.estimated_annual_profit_y3?.amount || 0) / 
+         parseFloat(fa.three_year_projections.estimated_annual_revenue_y3?.amount || 1)) * 100 : 0;
+      
+      // Generate realistic revenue projections based on business model
+      const revenueProjections = [];
+      if (fa.cash_flow_projection_annual) {
+        // Use existing cash flow data
+        for (const year of fa.cash_flow_projection_annual) {
+          const yearlyRevenue = parseInt(year.inflow || 0);
+          const monthlyRevenue = yearlyRevenue / 12;
+          for (let month = 0; month < 12; month++) {
+            revenueProjections.push(Math.round(monthlyRevenue * (1 + month * 0.05))); // 5% monthly growth
+          }
+          if (revenueProjections.length >= 12) break; // Only show first year
+        }
+      } else {
+        // Generate based on break-even and expenses
+        const baseRevenue = monthlyExpenses > 0 ? monthlyExpenses * 1.3 : 15000;
+        for (let i = 0; i < 12; i++) {
+          revenueProjections.push(Math.round(baseRevenue * (1 + (i * 0.08)))); // 8% growth per month
+        }
+      }
+      
+      return {
+        startup_costs: startupCosts || 200000,
+        monthly_expenses: monthlyExpenses || 30000,
+        revenue_projections: revenueProjections.length > 0 ? revenueProjections : 
+          Array.from({ length: 12 }, (_, i) => Math.round(35000 * (1 + i * 0.08))),
+        break_even_month: breakEvenMonths || 9,
+        funding_needed: startupCosts || 200000,
+        profit_margin: Math.round(profitMargin) || 20,
+        roi: parseInt(fa.three_year_projections?.expected_roi_3_years_percent?.percentage || 0) || 200,
+        text: output
+      };
+    }
+    
+    // Fallback to text parsing if JSON parsing fails
+    const lines = output.split('\n');
+    let financialData = {
+      startup_costs: 0,
+      monthly_expenses: 0,
+      revenue_projections: [] as number[],
+      break_even_month: 0,
+      funding_needed: 0,
+      profit_margin: 0,
+      roi: 0,
+      text: output
+    };
+
+    // Extract numbers from the text using regex
+    for (const line of lines) {
+      if (line.toLowerCase().includes('startup') && line.toLowerCase().includes('cost')) {
+        const match = line.match(/\$?([\d,]+)/);
+        if (match) financialData.startup_costs = parseInt(match[1].replace(/,/g, ''));
+      }
+      if (line.toLowerCase().includes('monthly') && line.toLowerCase().includes('expense')) {
+        const match = line.match(/\$?([\d,]+)/);
+        if (match) financialData.monthly_expenses = parseInt(match[1].replace(/,/g, ''));
+      }
+      if (line.toLowerCase().includes('break') && line.toLowerCase().includes('even')) {
+        const match = line.match(/(\d+)/);
+        if (match) financialData.break_even_month = parseInt(match[1]);
+      }
+      if (line.toLowerCase().includes('profit') && line.toLowerCase().includes('margin')) {
+        const match = line.match(/(\d+)%/);
+        if (match) financialData.profit_margin = parseInt(match[1]);
+      }
+      if (line.toLowerCase().includes('funding') && line.toLowerCase().includes('need')) {
+        const match = line.match(/\$?([\d,]+)/);
+        if (match) financialData.funding_needed = parseInt(match[1].replace(/,/g, ''));
+      }
+      if (line.toLowerCase().includes('roi') || line.toLowerCase().includes('return on investment')) {
+        const match = line.match(/(\d+)%/);
+        if (match) financialData.roi = parseInt(match[1]);
+      }
+    }
+
+    // Generate sample revenue projections if not found
+    if (financialData.revenue_projections.length === 0) {
+      const baseRevenue = financialData.monthly_expenses > 0 ? financialData.monthly_expenses * 1.3 : 15000;
+      for (let i = 0; i < 12; i++) {
+        financialData.revenue_projections.push(Math.round(baseRevenue * (1 + (i * 0.08)))); // 8% growth per month
+      }
+    }
+
+    // Set defaults if nothing was extracted
+    if (financialData.startup_costs === 0) financialData.startup_costs = 200000;
+    if (financialData.monthly_expenses === 0) financialData.monthly_expenses = 30000;
+    if (financialData.break_even_month === 0) financialData.break_even_month = 9;
+    if (financialData.funding_needed === 0) financialData.funding_needed = 200000;
+    if (financialData.profit_margin === 0) financialData.profit_margin = 20;
+    if (financialData.roi === 0) financialData.roi = 200;
+
+    return financialData;
+  } catch (error) {
+    console.error('Error parsing financial assessment:', error);
+    return {
+      startup_costs: 200000,
+      monthly_expenses: 30000,
+      revenue_projections: Array.from({ length: 12 }, (_, i) => Math.round(39000 * (1 + i * 0.08))),
+      break_even_month: 9,
+      funding_needed: 200000,
+      profit_margin: 20,
+      roi: 200,
+      text: output
+    };
   }
 }
 
@@ -131,7 +425,7 @@ export function parseBMCOutput(output: string) {
   return bmc;
 }
 
-export function parseSWOTOutput(output: string) {
+export function parseSWOTOutput(output: any) {
   // Initialize the parsed structure
   const parsed = {
     strengths: '',
@@ -140,6 +434,25 @@ export function parseSWOTOutput(output: string) {
     threats: '',
     fullAnalysis: output
   };
+  
+  // If output is not a string, convert it or handle it appropriately
+  if (typeof output !== 'string') {
+    if (typeof output === 'object' && output !== null) {
+      // If it's already an object with SWOT structure, use it directly
+      if (output.strengths || output.weaknesses || output.opportunities || output.threats) {
+        parsed.strengths = Array.isArray(output.strengths) ? output.strengths.join('\n\n') : (output.strengths || '');
+        parsed.weaknesses = Array.isArray(output.weaknesses) ? output.weaknesses.join('\n\n') : (output.weaknesses || '');
+        parsed.opportunities = Array.isArray(output.opportunities) ? output.opportunities.join('\n\n') : (output.opportunities || '');
+        parsed.threats = Array.isArray(output.threats) ? output.threats.join('\n\n') : (output.threats || '');
+        return parsed;
+      }
+      // Try to stringify the object
+      output = JSON.stringify(output);
+    } else {
+      // Convert to string
+      output = String(output);
+    }
+  }
   
   try {
     // Try to parse as JSON first if it looks like JSON
@@ -172,7 +485,7 @@ export function parseSWOTOutput(output: string) {
   // Text-based parsing for markdown or plain text format
   const sections = output.split(/(?:^|\n)(?:#{1,3}\s*|## )/i);
   
-  sections.forEach(section => {
+  sections.forEach((section: string) => {
     const sectionLower = section.toLowerCase();
     
     if (sectionLower.includes('strength') && !sectionLower.includes('weakness')) {
@@ -191,7 +504,7 @@ export function parseSWOTOutput(output: string) {
     const lines = output.split('\n');
     let currentSection = '';
     
-    lines.forEach(line => {
+    lines.forEach((line: string) => {
       const lineLower = line.toLowerCase().trim();
       
       if (lineLower.includes('strength') && !lineLower.includes('weakness')) {

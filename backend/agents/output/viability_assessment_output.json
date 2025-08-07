@@ -1,0 +1,60 @@
+{
+  "market_difficulty": 7,
+  "success_probability": 60,
+  "risk_level": "medium",
+  "funding_difficulty": 4,
+  "time_to_profitability": 12,
+  "market_opportunity_score": 8,
+  "competition_intensity": 6,
+  "regulatory_complexity": 5,
+  "overall_viability_score": 55,
+  "startup_budget_amount": 300,
+  "startup_budget_currency": "DT",
+  "budget_adequacy": "adequate",
+  "key_success_factors": [
+    "Strong online presence",
+    "Effective marketing strategy",
+    "Partnerships with educational institutions"
+  ],
+  "major_risks": [
+    "Stigma surrounding mental health in Tunisia",
+    "Competition from established players",
+    "Regulatory hurdles"
+  ],
+  "recommendations": [
+    "Conduct thorough market research",
+    "Develop a robust marketing strategy",
+    "Establish partnerships with key stakeholders"
+  ],
+  "financial_health": {
+    "startup_cost_assessment": "medium",
+    "revenue_potential": "medium",
+    "break_even_feasibility": "fair"
+  },
+  "market_position": {
+    "competitive_advantage": "moderate",
+    "market_timing": "good",
+    "target_market_size": "medium"
+  },
+  "execution_difficulty": {
+    "technical_complexity": "medium",
+    "operational_complexity": "medium",
+    "skill_requirements": "medium"
+  },
+  "currency_info": {
+    "primary_currency": "DT",
+    "currency_symbol": "DT",
+    "conversion_notes": "1 USD = 2.5 DT"
+  },
+  "business_context": {
+    "business_type": "Healthcare Platform",
+    "industry": "Mental Health/Healthcare",
+    "target_market": "Tunisian Market",
+    "product_category": "Group Therapy Services",
+    "budget": 300,
+    "currency": "DT",
+    "target_demographic": "Tunisian youth, with a focus on students and young professionals",
+    "location": "Tunisia",
+    "fulfillment": "Online"
+  }
+}

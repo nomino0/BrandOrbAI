@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "BrandOrb AI - AI-Powered Brand Strategy Platform",
@@ -30,6 +31,7 @@ export default function RootLayout({
           storageKey="brandorb-theme"
         >
           {children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

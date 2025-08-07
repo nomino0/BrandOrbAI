@@ -452,6 +452,19 @@ Based on the comprehensive analysis, this business shows strong potential with c
         # Update the state with the summary
         state.summary = summary_text
         
+        # Automatically save business summary to file for other agents
+        try:
+            output_dir = os.path.join(os.path.dirname(__file__), "output")
+            os.makedirs(output_dir, exist_ok=True)
+            summary_file_path = os.path.join(output_dir, "business_summary.txt")
+            
+            with open(summary_file_path, "w", encoding="utf-8") as f:
+                f.write(summary_text)
+            
+            print(f"Business summary automatically saved to: {summary_file_path}")
+        except Exception as e:
+            print(f"Warning: Could not save business summary to file: {e}")
+        
         # If image metadata is provided, append it to the summary
         if include_image_metadata and image_data:
             image_metadata = "\n\n---\n\n## Generated Visual Assets\n\n"

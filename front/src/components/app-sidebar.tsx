@@ -6,16 +6,14 @@ import { useTheme } from "next-themes"
 import Image from "next/image"
 import Link from "next/link"
 import {
-  IconCheck,
-  IconCircle,
-  IconLoader,
-  IconLock,
-  IconBulb,
-  IconFileText,
-  IconTable,
-  IconTarget,
-  IconCalendar,
-} from "@tabler/icons-react"
+  Lamp,
+  FileText,
+  Grid,
+  Target,
+  TrendingUp,
+  Presentation,
+  ChartLine,
+} from "@mynaui/icons-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -28,95 +26,209 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-
-const data = {
-  user: {
-    name: "BrandOrb User",
-    email: "user@brandorb.ai",
-    avatar: "/avatars/user.jpg",
-  },
-  navMain: [
-    {
-      title: "Stage 1: Ideation",
-      url: "/dashboard/ideation",
-      icon: IconBulb,
-      isActive: true,
-      status: "completed",
-      items: [],
-    },
-    {
-      title: "Stage 2: SWOT Analysis",
-      url: "/dashboard/critical-report",
-      icon: IconFileText,
-      status: "current",
-      progress: 0,
-      items: [
-        {
-          title: "Strengths Analysis",
-          url: "/dashboard/critical-report/1",
-          status: "locked",
-        },
-        {
-          title: "Weaknesses Analysis",
-          url: "/dashboard/critical-report/2",
-          status: "locked",
-        },
-        {
-          title: "Opportunities Analysis",
-          url: "/dashboard/critical-report/3",
-          status: "locked",
-        },
-        {
-          title: "Threats Analysis",
-          url: "/dashboard/critical-report/4",
-          status: "locked",
-        },
-      ],
-    },
-    {
-      title: "Stage 3: BMC",
-      url: "/dashboard/bmc",
-      icon: IconTable,
-      status: "locked",
-      items: [],
-    },
-    {
-      title: "Stage 4: Milestones",
-      url: "/dashboard/milestones",
-      icon: IconTarget,
-      status: "locked",
-      items: [],
-    },
-    {
-      title: "Roadmap & Calendar",
-      url: "/dashboard/roadmap",
-      icon: IconCalendar,
-      status: "locked",
-      items: [],
-    },
-  ],
-}
-
-function getStatusIcon(status: string, progress?: number) {
-  switch (status) {
-    case "completed":
-      return <IconCheck className="h-4 w-4 text-green-600" />
-    case "current":
-      return <IconLoader className="h-4 w-4 text-blue-600 animate-spin" />
-    case "locked":
-      return <IconLock className="h-4 w-4 text-gray-400" />
-    default:
-      return <IconCircle className="h-4 w-4 text-gray-400" />
-  }
-}
+import { getWorkflowStatus, WorkflowStatus } from "@/services/agents"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [mounted, setMounted] = useState(false)
+  const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null)
   const { resolvedTheme } = useTheme()
 
   useEffect(() => {
     setMounted(true)
+    // Load workflow status
+    loadWorkflowStatus()
+    
+    // Listen for storage changes to update sidebar
+    const handleStorageChange = () => {
+      loadWorkflowStatus()
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    // Also listen for custom events when localStorage is updated in the same tab
+    window.addEventListener('workflowUpdated', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('workflowUpdated', handleStorageChange)
+    }
   }, [])
+
+  const loadWorkflowStatus = async () => {
+    try {
+      const status = await getWorkflowStatus()
+      console.log('Sidebar workflow status:', status)
+      
+      // Check actual data existence to override status if needed
+      if (typeof window !== 'undefined') {
+        const financialData = localStorage.getItem('brandorb_financial_data');
+        const marketData = localStorage.getItem('brandorb_market_data');
+        const swotData = localStorage.getItem('brandorb_swot_data');
+        const bmcData = localStorage.getItem('brandorb_bmc_data');
+        
+        // Update status based on actual data
+        const dataBasedStatus = { ...status };
+        if (financialData && marketData) {
+          dataBasedStatus.viability_assessment = 'completed';
+        }
+        if (swotData) {
+          dataBasedStatus.swot_analysis = 'completed';
+        }
+        if (bmcData) {
+          dataBasedStatus.bmc = 'completed';
+        }
+        
+        setWorkflowStatus(dataBasedStatus);
+      } else {
+        setWorkflowStatus(status);
+      }
+    } catch (error) {
+      console.error('Failed to load workflow status:', error)
+      // Set a default fallback status
+      setWorkflowStatus({
+        ideation: 'completed',
+        viability_assessment: 'locked',
+        swot_analysis: 'locked', 
+        bmc: 'locked',
+        brand_identity: 'locked',
+        marketing_strategy: 'locked',
+        pitch_deck: 'locked'
+      })
+    }
+  }
+
+  // Create navigation data with dynamic status
+  const getNavData = () => {
+    if (!workflowStatus) {
+      // Default locked state
+      return [
+        {
+          title: "Ideation",
+          url: "/dashboard/ideation",
+          icon: Lamp,
+          status: "completed", // Always completed after onboarding
+          items: [],
+        },
+        {
+          title: "Viability Assessment",
+          url: "/dashboard/viability-assessment",
+          icon: FileText,
+          status: "locked",
+          progress: 0,
+          items: [],
+        },
+        {
+          title: "SWOT Analysis",
+          url: "/dashboard/swot-analysis",
+          icon: ChartLine,
+          status: "locked",
+          items: [],
+        },
+        {
+          title: "Business Model Canvas",
+          url: "/dashboard/bmc",
+          icon: Grid,
+          status: "locked",
+          items: [],
+        },
+        {
+          title: "Brand Identity",
+          url: "/dashboard/identity",
+          icon: Target,
+          status: "locked",
+          items: [
+            {
+              title: "Guidelines",
+              url: "/dashboard/identity/brand-guidelines",
+              status: "locked",
+            },
+            {
+              title: "Company Profile",
+              url: "/dashboard/identity/profile",
+              status: "locked",
+            }
+          ],
+        },
+        {
+          title: "Marketing Strategy",
+          url: "/dashboard/marketing-strategy",
+          icon: TrendingUp,
+          status: "locked",
+          items: [],
+        },
+        {
+          title: "Pitch Deck",
+          url: "/dashboard/pitch-deck",
+          icon: Presentation,
+          status: "locked",
+          items: [],
+        },
+      ]
+    }
+
+    return [
+      {
+        title: "Ideation",
+        url: "/dashboard/ideation",
+        icon: Lamp,
+        status: "completed", // Always completed if we have summary and idea
+        items: [],
+      },
+      {
+        title: "Viability Assessment",
+        url: "/dashboard/viability-assessment",
+        icon: FileText,
+        status: workflowStatus.viability_assessment || "locked",
+        progress: 0,
+        items: [],
+      },
+      {
+        title: "SWOT Analysis",
+        url: "/dashboard/swot-analysis",
+        icon: ChartLine,
+        status: workflowStatus.swot_analysis || "locked",
+        items: [],
+      },
+      {
+        title: "Business Model Canvas",
+        url: "/dashboard/bmc",
+        icon: Grid,
+        status: workflowStatus.bmc || "locked",
+        items: [],
+      },
+      {
+        title: "Brand Identity",
+        url: "/dashboard/identity",
+        icon: Target,
+        status: workflowStatus.brand_identity || "locked",
+        items: [
+          {
+            title: "Guidelines",
+            url: "/dashboard/identity/brand-guidelines",
+            status: workflowStatus.brand_identity || "locked",
+          },
+          {
+            title: "Company Profile",
+            url: "/dashboard/identity/profile",
+            status: workflowStatus.brand_identity || "locked",
+          }
+        ],
+      },
+      {
+        title: "Marketing Strategy",
+        url: "/dashboard/marketing-strategy",
+        icon: TrendingUp,
+        status: workflowStatus.marketing_strategy || "locked",
+        items: [],
+      },
+      {
+        title: "Pitch Deck",
+        url: "/dashboard/pitch-deck",
+        icon: Presentation,
+        status: workflowStatus.pitch_deck || "locked",
+        items: [],
+      },
+    ]
+  }
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -146,10 +258,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="px-2 py-4">
-        <NavMain items={data.navMain} />
+        <NavMain items={getNavData()} />
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/50 p-2">
-        <NavUser user={data.user} />
+        <NavUser user={{
+          name: "BrandOrb User",
+          email: "user@brandorb.ai",
+          avatar: "/avatars/user.jpg",
+        }} />
       </SidebarFooter>
     </Sidebar>
   )
