@@ -3,7 +3,11 @@ import os
 import json
 import logging
 import uuid
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Dict, Any
+import sys
+import os
+import logging
 
 # Add paths for imports
 sys.path.append(os.path.dirname(__file__))
@@ -23,6 +27,10 @@ from agents.bmc_agent import extract_bmc_parts, read_multiple_files
 from agents.image_agent import run_image_generation_agent
 from agents.swot_agent import SWOTAgent, run_swot_agent
 from agents.viability_agent import run_viability_assessment
+from agents.brand_identity_agent import BrandIdentityAgent, run_brand_identity_analysis
+from agents.brand_discovery_agent import BrandDiscoveryAgent, BrandDiscoverySession, run_brand_discovery_analysis
+from agents.brand_orchestrator import BrandOrchestrator, run_brand_orchestration
+from agents.identity_orchestrator import IdentityOrchestrator, run_comprehensive_brand_identity, run_comprehensive_brand_identity
 
 # Import ideation agents
 from agents.ideation_structs import State, QuestionEntry
@@ -87,6 +95,8 @@ async def log_requests(request: Request, call_next):
 # In-memory storage
 runs = {}  # For multi-agent runs
 sessions = {}  # For ideation sessions
+brand_identity_storage = {}  # For brand identity results
+brand_discovery_sessions = {}  # For brand discovery sessions
 
 # =============================================================================
 # PYDANTIC MODELS
@@ -156,6 +166,44 @@ class SuggestAnswerResponse(BaseModel):
 class SummaryResponse(BaseModel):
     summary: str
 
+# Brand Identity models
+class BrandChatbotData(BaseModel):
+    company_name: Optional[str] = None
+    brand_values: Optional[List[str]] = []
+    target_audience: Optional[str] = None
+    brand_personality: Optional[str] = None
+    visual_preferences: Optional[dict] = {}
+    voice_tone_preferences: Optional[str] = None
+    mission_input: Optional[str] = None
+    vision_input: Optional[str] = None
+
+class BrandIdentityRequest(BaseModel):
+    business_summary: str
+    chatbot_data: Optional[BrandChatbotData] = None
+
+class LogoGenerationRequest(BaseModel):
+    brand_name: str
+    logo_concept: dict
+    colors: List[str]
+
+class BrandAssetsRequest(BaseModel):
+    brand_book: dict
+    logo_data: dict
+
+# Brand Discovery models
+class BrandDiscoveryInitRequest(BaseModel):
+    session_id: str
+    business_summary: str
+
+class BrandDiscoveryResponseRequest(BaseModel):
+    session_id: str
+    response: Any
+
+class BrandDiscoveryCompleteRequest(BaseModel):
+    session_id: str
+    responses: Dict[str, Any]
+    include_existing_data: Optional[bool] = True
+
 # =============================================================================
 # MULTI-AGENT ENDPOINTS
 # =============================================================================
@@ -213,6 +261,10 @@ async def get_agent_output(agent: str = Query(...)):
         "opportunities": os.path.join(
             os.path.dirname(__file__),
             "agents", "output", "opportunities_output.txt"
+        ),
+        "business_summary": os.path.join(
+            os.path.dirname(__file__),
+            "agents", "output", "business_summary.txt"
         ),
     }
     
@@ -374,39 +426,6 @@ async def save_business_summary(request: dict):
         logger.error(f"Error saving business summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save business summary: {str(e)}")
 
-@app.post("/save-business-summary")
-async def save_business_summary(request: dict):
-    """Save business summary for use by other agents"""
-    try:
-        summary_text = request.get("summary", "")
-        if not summary_text:
-            raise HTTPException(status_code=400, detail="Summary text is required")
-        
-        # Save to business_summary.txt
-        output_dir = os.path.join(os.path.dirname(__file__), "agents", "output")
-        os.makedirs(output_dir, exist_ok=True)
-        summary_file_path = os.path.join(output_dir, "business_summary.txt")
-        
-        # Add current date to the summary
-        from datetime import datetime
-        current_date = datetime.now().strftime("%m/%d/%Y")
-        formatted_summary = f"{summary_text}\nGenerated on {current_date}"
-        
-        with open(summary_file_path, "w", encoding="utf-8") as f:
-            f.write(formatted_summary)
-        
-        logger.info(f"Business summary saved to: {summary_file_path}")
-        
-        return {
-            "message": "Business summary saved successfully",
-            "file_path": summary_file_path,
-            "summary_length": len(formatted_summary)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error saving business summary: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to save business summary: {str(e)}")
-
 @app.post("/run-viability")
 async def run_viability_analysis():
     """Generate comprehensive viability assessment based on existing agent outputs"""
@@ -511,6 +530,690 @@ async def get_swot_output():
     except Exception as e:
         logger.error(f"Error reading SWOT output: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to read SWOT output")
+
+# =============================================================================
+# COMPREHENSIVE BRAND IDENTITY ENDPOINTS (New Orchestrator)
+# =============================================================================
+
+@app.post("/brand-identity/logo")
+async def create_logo_only(request: dict):
+    """Create logo only"""
+    try:
+        business_data = request.get("business_data", {})
+        requirements = request.get("requirements", "")
+        
+        orchestrator = IdentityOrchestrator()
+        
+        # Generate logo
+        logo_result = orchestrator.logo_agent.generate_comprehensive_logo(
+            business_context=business_data.get("summary", ""),
+            business_model_data=business_data.get("bmc", {}),
+            brand_requirements=requirements
+        )
+        
+        return {
+            "success": True,
+            "type": "logo",
+            "options": ["Modern Logo", "Classic Logo", "Creative Logo"],
+            "download_urls": logo_result.get("logo_urls", [])
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in logo creation: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/brand-identity/colors")
+async def create_colors_only(request: dict):
+    """Create color palette only"""
+    try:
+        business_data = request.get("business_data", {})
+        requirements = request.get("requirements", "")
+        
+        # Simple color palette generation
+        palette = ["#2563EB", "#7C3AED", "#059669", "#DC2626", "#EA580C"]
+        
+        return {
+            "success": True,
+            "type": "colors",
+            "palette": palette
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in color creation: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/brand-identity/flyer")
+async def create_flyer_only(request: dict):
+    """Create flyer only"""
+    try:
+        business_data = request.get("business_data", {})
+        requirements = request.get("requirements", "")
+        
+        orchestrator = IdentityOrchestrator()
+        
+        # Generate flyer
+        flyer_result = orchestrator.flyer_agent.generate_comprehensive_flyer(
+            business_context=business_data.get("summary", ""),
+            business_model_data=business_data.get("bmc", {}),
+            brand_requirements=requirements
+        )
+        
+        return {
+            "success": True,
+            "type": "flyer",
+            "designs": ["Business Flyer", "Marketing Flyer"],
+            "download_urls": flyer_result.get("flyer_urls", [])
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in flyer creation: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/brand-identity/comprehensive")
+async def create_comprehensive_brand_identity(request: dict):
+    """Create comprehensive brand identity using the identity orchestrator"""
+    try:
+        business_summary = request.get("business_summary", "")
+        brand_discovery_data = request.get("brand_discovery_data")
+        existing_business_data = request.get("existing_business_data")
+        
+        if not business_summary:
+            raise HTTPException(status_code=400, detail="Business summary is required")
+        
+        logger.info("Starting comprehensive brand identity creation with orchestrator")
+        
+        # Load existing business data if not provided
+        if not existing_business_data:
+            try:
+                existing_business_data = await _load_existing_business_data()
+            except Exception as e:
+                logger.warning(f"Could not load existing business data: {e}")
+                existing_business_data = {}
+        
+        # Run comprehensive brand identity creation
+        result = run_comprehensive_brand_identity(
+            business_summary,
+            brand_discovery_data,
+            existing_business_data
+        )
+        
+        if result.get("success"):
+            # Store the result
+            analysis_id = f"comprehensive_{int(datetime.now().timestamp())}"
+            brand_identity_storage[analysis_id] = {
+                "content": result["brand_identity"],
+                "metadata": result.get("generation_metadata", {}),
+                "created_at": datetime.now().isoformat()
+            }
+            
+            # Save to file for persistence
+            try:
+                output_dir = os.path.join(os.path.dirname(__file__), "agents", "output")
+                os.makedirs(output_dir, exist_ok=True)
+                
+                output_file = os.path.join(output_dir, f"comprehensive_brand_identity_{analysis_id}.json")
+                with open(output_file, "w", encoding="utf-8") as f:
+                    json.dump(brand_identity_storage[analysis_id], f, indent=2)
+                    
+            except Exception as e:
+                logger.warning(f"Could not save comprehensive brand identity to file: {e}")
+            
+            return {
+                "success": True,
+                "analysis_id": analysis_id,
+                "brand_identity": result["brand_identity"],
+                "metadata": result.get("generation_metadata", {})
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("error", "Comprehensive brand identity creation failed")
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in comprehensive brand identity endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/brand-identity/services-status")
+async def get_brand_identity_services_status():
+    """Get status of all brand identity services"""
+    try:
+        orchestrator = IdentityOrchestrator()
+        services_status = orchestrator._get_services_status()
+        
+        return {
+            "services": services_status,
+            "orchestrator_available": True,
+            "identity_agents_path": os.path.join(os.path.dirname(__file__), "agents", "identity"),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking services status: {e}")
+        return {
+            "services": {"error": str(e)},
+            "orchestrator_available": False,
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.post("/brand-identity/generate-logo")
+async def generate_logo_via_orchestrator(request: dict):
+    """Generate logo using the identity orchestrator"""
+    try:
+        business_description = request.get("business_description", "")
+        logo_description = request.get("logo_description", "modern and professional")
+        selected_colors = request.get("selected_colors", ["#2563EB", "#FFFFFF"])
+        
+        if not business_description:
+            raise HTTPException(status_code=400, detail="Business description is required")
+        
+        orchestrator = IdentityOrchestrator()
+        
+        if not orchestrator.logo_agent:
+            raise HTTPException(status_code=503, detail="Logo generation service not available")
+        
+        logo_result = orchestrator.logo_agent.generate_logo(
+            business_description,
+            logo_description,
+            selected_colors
+        )
+        
+        if logo_result and logo_result.get("success"):
+            # Store the logo
+            logo_id = f"logo_{int(datetime.now().timestamp())}"
+            brand_identity_storage[logo_id] = {
+                "type": "logo",
+                "content": logo_result,
+                "created_at": datetime.now().isoformat()
+            }
+            
+            return {
+                "success": True,
+                "logo_id": logo_id,
+                "logo_data": logo_result
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Logo generation failed"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in logo generation endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/brand-identity/generate-flyer")
+async def generate_flyer_via_orchestrator(request: dict):
+    """Generate flyer using the identity orchestrator"""
+    try:
+        business_description = request.get("business_description", "")
+        flyer_content = request.get("flyer_content", "")
+        
+        if not business_description:
+            raise HTTPException(status_code=400, detail="Business description is required")
+        
+        orchestrator = IdentityOrchestrator()
+        
+        if not orchestrator.flyer_agent:
+            raise HTTPException(status_code=503, detail="Flyer generation service not available")
+        
+        flyer_result = orchestrator.flyer_agent.generate_comprehensive_flyer(
+            business_description,
+            flyer_content or f"Professional flyer for {business_description}"
+        )
+        
+        if flyer_result:
+            # Store the flyer
+            flyer_id = f"flyer_{int(datetime.now().timestamp())}"
+            brand_identity_storage[flyer_id] = {
+                "type": "flyer",
+                "content": flyer_result,
+                "created_at": datetime.now().isoformat()
+            }
+            
+            return {
+                "success": True,
+                "flyer_id": flyer_id,
+                "flyer_data": flyer_result
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Flyer generation failed"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in flyer generation endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/brand-identity/assets/{asset_id}")
+async def get_brand_identity_asset(asset_id: str):
+    """Get a specific brand identity asset (logo, flyer, etc.)"""
+    try:
+        if asset_id in brand_identity_storage:
+            return {
+                "success": True,
+                "asset": brand_identity_storage[asset_id]
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Asset not found")
+            
+    except Exception as e:
+        logger.error(f"Error retrieving asset {asset_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# BRAND DISCOVERY ENDPOINTS
+# =============================================================================
+
+@app.post("/brand-discovery/init")
+async def init_brand_discovery_session(request: BrandDiscoveryInitRequest):
+    """Initialize a new brand discovery session"""
+    try:
+        logger.info(f"Initializing brand discovery session: {request.session_id}")
+        
+        # Create new discovery session
+        session = BrandDiscoverySession(request.session_id, request.business_summary)
+        brand_discovery_sessions[request.session_id] = session
+        
+        # Get first question
+        current_question = session.get_current_question()
+        
+        return {
+            "success": True,
+            "session_id": request.session_id,
+            "session_structure": session.agent.get_discovery_session_structure(),
+            "current_question": current_question,
+            "existing_analysis": session.analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"Error initializing brand discovery session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/brand-discovery/respond")
+async def respond_to_brand_discovery_question(request: BrandDiscoveryResponseRequest):
+    """Submit response to current brand discovery question"""
+    try:
+        if request.session_id not in brand_discovery_sessions:
+            raise HTTPException(status_code=404, detail="Brand discovery session not found")
+        
+        session = brand_discovery_sessions[request.session_id]
+        result = session.submit_response(request.response)
+        
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        return {
+            "success": True,
+            "next_question": result["next_question"],
+            "progress": session._calculate_progress()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error responding to brand discovery question: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/brand-discovery/suggestions/{session_id}")
+async def get_brand_discovery_suggestions(session_id: str, question_type: str = Query(...)):
+    """Get suggestions for specific question types (e.g., business names)"""
+    try:
+        if session_id not in brand_discovery_sessions:
+            raise HTTPException(status_code=404, detail="Brand discovery session not found")
+        
+        session = brand_discovery_sessions[session_id]
+        
+        if question_type == "business_name":
+            suggestions = session.agent.generate_business_name_suggestions(session.business_summary)
+            return {"suggestions": suggestions}
+        
+        return {"suggestions": []}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting brand discovery suggestions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/brand-discovery/complete")
+async def complete_brand_discovery(request: BrandDiscoveryCompleteRequest):
+    """Complete brand discovery and create comprehensive brand identity"""
+    try:
+        logger.info(f"Completing brand discovery for session: {request.session_id}")
+        
+        if request.session_id not in brand_discovery_sessions:
+            raise HTTPException(status_code=404, detail="Brand discovery session not found")
+        
+        session = brand_discovery_sessions[request.session_id]
+        
+        # Run brand discovery analysis
+        discovery_result = run_brand_discovery_analysis(
+            request.session_id, 
+            session.business_summary, 
+            request.responses
+        )
+        
+        if not discovery_result["success"]:
+            return {
+                "success": False,
+                "errors": discovery_result.get("errors", []),
+                "warnings": discovery_result.get("warnings", [])
+            }
+        
+        # Gather existing business data if requested
+        existing_data = {}
+        if request.include_existing_data:
+            try:
+                # Load existing analysis files
+                existing_data = await _load_existing_business_data()
+            except Exception as e:
+                logger.warning(f"Could not load existing data: {e}")
+        
+        # Run brand orchestration
+        orchestration_result = run_brand_orchestration(
+            discovery_result["brand_brief"],
+            existing_data
+        )
+        
+        if not orchestration_result["success"]:
+            return {
+                "success": False,
+                "error": orchestration_result.get("error", "Brand orchestration failed")
+            }
+        
+        # Store result
+        analysis_id = f"discovery_{request.session_id}_{int(datetime.now().timestamp())}"
+        brand_identity_storage[analysis_id] = {
+            "content": orchestration_result["brand_identity"],
+            "metadata": {
+                "created_at": datetime.now().isoformat(),
+                "session_id": request.session_id,
+                "discovery_data": discovery_result["brand_brief"],
+                "orchestration_version": "2.0"
+            }
+        }
+        
+        # Save to file for persistence
+        try:
+            output_dir = os.path.join(os.path.dirname(__file__), "agents", "output")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            output_file = os.path.join(output_dir, f"brand_identity_{analysis_id}.json")
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(brand_identity_storage[analysis_id], f, indent=2)
+                
+        except Exception as e:
+            logger.warning(f"Could not save brand identity to file: {e}")
+        
+        # Clean up session
+        if request.session_id in brand_discovery_sessions:
+            del brand_discovery_sessions[request.session_id]
+        
+        return {
+            "success": True,
+            "analysis_id": analysis_id,
+            "brand_identity": orchestration_result["brand_identity"],
+            "discovery_data": discovery_result["brand_brief"]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing brand discovery: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/brand-discovery/session/{session_id}")
+async def get_brand_discovery_session(session_id: str):
+    """Get current brand discovery session state"""
+    try:
+        if session_id not in brand_discovery_sessions:
+            raise HTTPException(status_code=404, detail="Brand discovery session not found")
+        
+        session = brand_discovery_sessions[session_id]
+        current_question = session.get_current_question()
+        
+        return {
+            "session_id": session_id,
+            "current_question": current_question,
+            "responses": session.responses,
+            "progress": session._calculate_progress(),
+            "created_at": session.created_at.isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting brand discovery session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def _load_existing_business_data() -> Dict[str, Any]:
+    """Load existing business analysis data from files"""
+    existing_data = {}
+    output_dir = os.path.join(os.path.dirname(__file__), "agents", "output")
+    
+    # Load business summary
+    business_summary_path = os.path.join(output_dir, "business_summary.txt")
+    if os.path.exists(business_summary_path):
+        with open(business_summary_path, "r", encoding="utf-8") as f:
+            existing_data["business_summary"] = f.read()
+    
+    # Load SWOT analysis
+    swot_path = os.path.join(output_dir, "swot_complete.json")
+    if os.path.exists(swot_path):
+        with open(swot_path, "r", encoding="utf-8") as f:
+            existing_data["swot_analysis"] = json.load(f)
+    
+    # Load viability assessment
+    viability_path = os.path.join(output_dir, "viability_assessment_output.json")
+    if os.path.exists(viability_path):
+        with open(viability_path, "r", encoding="utf-8") as f:
+            existing_data["viability_assessment"] = json.load(f)
+    
+    # Load market analysis
+    market_path = os.path.join(output_dir, "market_analysis_competitors_output.txt")
+    if os.path.exists(market_path):
+        with open(market_path, "r", encoding="utf-8") as f:
+            existing_data["market_analysis"] = f.read()
+    
+    # Load BMC data
+    bmc_path = os.path.join(output_dir, "bmc_output.txt")
+    if os.path.exists(bmc_path):
+        with open(bmc_path, "r", encoding="utf-8") as f:
+            existing_data["bmc_data"] = f.read()
+    
+    return existing_data
+
+# =============================================================================
+# BRAND IDENTITY ENDPOINTS (Enhanced)
+# =============================================================================
+
+@app.post("/run-brand-identity")
+async def run_brand_identity_analysis_endpoint(request: BrandIdentityRequest):
+    """Run comprehensive brand identity analysis with chatbot integration"""
+    try:
+        # Convert chatbot data to dict if provided
+        chatbot_data_dict = None
+        if request.chatbot_data:
+            chatbot_data_dict = request.chatbot_data.model_dump()
+        
+        logger.info("Starting brand identity analysis...")
+        
+        # Run the brand identity analysis
+        result = run_brand_identity_analysis(
+            business_summary=request.business_summary,
+            chatbot_data=chatbot_data_dict
+        )
+        
+        if result.get("success"):
+            # Store the result with a unique ID
+            analysis_id = str(uuid.uuid4())
+            brand_identity_storage[analysis_id] = result
+            
+            logger.info("Brand identity analysis completed successfully")
+            return {
+                "message": "Brand identity analysis completed", 
+                "status": "success", 
+                "analysis_id": analysis_id,
+                "data": result
+            }
+        else:
+            logger.error(f"Brand identity analysis failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Brand identity analysis failed: {result.get('error', 'Unknown error')}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in brand identity analysis endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Brand identity analysis failed: {str(e)}")
+
+@app.get("/brand-identity-output")
+async def get_brand_identity_output(analysis_id: Optional[str] = None):
+    """Get brand identity analysis output"""
+    try:
+        if analysis_id and analysis_id in brand_identity_storage:
+            # Return specific analysis
+            return {"content": brand_identity_storage[analysis_id]}
+        elif brand_identity_storage:
+            # Return the most recent analysis
+            latest_id = max(brand_identity_storage.keys())
+            return {"content": brand_identity_storage[latest_id]}
+        else:
+            # Return empty content instead of error when no analysis exists
+            logger.info("No brand identity analysis found - returning empty content")
+            return {"content": None, "message": "No brand identity analysis found"}
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving brand identity output: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve brand identity output")
+
+@app.post("/generate-brand-palettes")
+async def generate_brand_color_palettes(request: dict):
+    """Generate color palettes for brand identity"""
+    try:
+        brand_context = request.get('brand_context', {})
+        
+        agent = BrandIdentityAgent()
+        palettes = agent.generate_color_palettes(brand_context)
+        
+        return {"palettes": palettes}
+        
+    except Exception as e:
+        logger.error(f"Error generating color palettes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate color palettes: {str(e)}")
+
+@app.post("/generate-logo-concepts")
+async def generate_brand_logo_concepts(request: dict):
+    """Generate logo concepts for brand identity"""
+    try:
+        brand_context = request.get('brand_context', {})
+        selected_colors = request.get('selected_colors', [])
+        
+        agent = BrandIdentityAgent()
+        concepts = agent.generate_logo_concepts(brand_context, selected_colors)
+        
+        return {"concepts": concepts}
+        
+    except Exception as e:
+        logger.error(f"Error generating logo concepts: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate logo concepts: {str(e)}")
+
+@app.post("/generate-logo-image")
+async def generate_brand_logo_image(request: LogoGenerationRequest):
+    """Generate actual logo image from concept"""
+    try:
+        agent = BrandIdentityAgent()
+        logo_result = agent.generate_logo_image(
+            brand_name=request.brand_name,
+            logo_concept=request.logo_concept,
+            colors=request.colors
+        )
+        
+        if logo_result.get("success"):
+            # Store the logo with unique ID
+            logo_id = str(uuid.uuid4())
+            brand_identity_storage[f"logo_{logo_id}"] = logo_result
+            
+            return {
+                "success": True,
+                "logo_id": logo_id,
+                "logo_data": logo_result
+            }
+        else:
+            raise HTTPException(status_code=500, detail=logo_result.get("error", "Logo generation failed"))
+        
+    except Exception as e:
+        logger.error(f"Error generating logo image: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate logo image: {str(e)}")
+
+@app.post("/generate-brand-assets")
+async def generate_brand_assets_endpoint(request: BrandAssetsRequest):
+    """Generate additional brand assets like business cards, letterheads"""
+    try:
+        agent = BrandIdentityAgent()
+        assets = agent.generate_brand_assets(
+            brand_book=request.brand_book,
+            logo_data=request.logo_data
+        )
+        
+        # Store assets with unique ID
+        assets_id = str(uuid.uuid4())
+        brand_identity_storage[f"assets_{assets_id}"] = assets
+        
+        return {
+            "success": True,
+            "assets_id": assets_id,
+            "assets": assets
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating brand assets: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate brand assets: {str(e)}")
+
+@app.get("/brand-identity-list")
+async def list_brand_identity_analyses():
+    """List all brand identity analyses"""
+    try:
+        analyses = []
+        for key, value in brand_identity_storage.items():
+            if not key.startswith(('logo_', 'assets_')):
+                analyses.append({
+                    "analysis_id": key,
+                    "generation_time": value.get("generation_time", "Unknown"),
+                    "success": value.get("success", False)
+                })
+        
+        return {"analyses": analyses}
+        
+    except Exception as e:
+        logger.error(f"Error listing brand identity analyses: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list brand identity analyses")
+
+# =============================================================================
+# REVISION ENDPOINTS
+# =============================================================================
+
+@app.post("/brand-identity/revise")
+async def revise_brand_identity(request: dict):
+    """Expert revision of a brand identity section. Body: { current_identity, section, instruction }."""
+    try:
+        current_identity = request.get("current_identity")
+        section = request.get("section")
+        instruction = request.get("instruction", "")
+        if not current_identity or not section:
+            raise HTTPException(status_code=400, detail="current_identity and section are required")
+        agent = BrandIdentityAgent()
+        result = agent.revise_brand_identity(current_identity, section, instruction)
+        return {"success": True, **result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Revision error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # =============================================================================
 # IDEATION ENDPOINTS
@@ -969,6 +1672,203 @@ async def delete_session(session_id: str):
     return response_data
 
 # =============================================================================
+# LOGO GENERATION ENDPOINTS
+# =============================================================================
+
+@app.post("/logo/generate-palettes")
+async def generate_logo_color_palettes(request: dict):
+    """Generate color palettes for logo design"""
+    try:
+        from agents.identity.main import LogoGeneratorAgent
+        
+        business_description = request.get("business_description", "")
+        if not business_description:
+            raise HTTPException(status_code=400, detail="Business description is required")
+        
+        agent = LogoGeneratorAgent()
+        palettes = agent.generate_color_palette(business_description)
+        
+        if palettes:
+            return {
+                "success": True,
+                "palettes": palettes
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to generate color palettes"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error generating color palettes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/logo/generate")
+async def generate_logo(request: dict):
+    """Generate a logo using Pollinations AI"""
+    try:
+        from agents.identity.main import LogoGeneratorAgent
+        
+        business_description = request.get("business_description", "")
+        logo_description = request.get("logo_description", "modern logo")
+        selected_colors = request.get("color_palette", request.get("selected_colors", ["#2563EB", "#1F2937"]))
+        
+        if not business_description:
+            raise HTTPException(status_code=400, detail="Business description is required")
+        
+        agent = LogoGeneratorAgent()
+        logo_result = agent.generate_logo(business_description, logo_description, selected_colors)
+        
+        if logo_result and logo_result.get('success'):
+            # Return URL for frontend to display
+            return {
+                "success": True,
+                "url": logo_result.get('image_url') or logo_result.get('url'),
+                "logo": logo_result
+            }
+        else:
+            error_msg = logo_result.get('error', 'Failed to generate logo') if logo_result else 'Failed to generate logo'
+            return {
+                "success": False,
+                "error": error_msg
+            }
+            
+    except Exception as e:
+        logger.error(f"Error generating logo: {e}")
+        # Return error response instead of raising exception to avoid 500 errors
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/logo/generate-3d")
+async def generate_3d_logo(request: dict):
+    """Generate a 3D version of a logo"""
+    try:
+        from agents.identity.main import LogoGeneratorAgent
+        
+        business_description = request.get("business_description", "")
+        logo_description = request.get("logo_description", "modern logo")
+        selected_colors = request.get("color_palette", request.get("selected_colors", ["#2563EB", "#1F2937"]))
+        base_logo_prompt = request.get("base_logo_prompt", None)
+        
+        if not business_description:
+            raise HTTPException(status_code=400, detail="Business description is required")
+        
+        agent = LogoGeneratorAgent()
+        logo_result = agent.generate_3d_logo(business_description, logo_description, selected_colors, base_logo_prompt)
+        
+        if logo_result and logo_result.get('success'):
+            return {
+                "success": True,
+                "logo_3d": logo_result
+            }
+        else:
+            return {
+                "success": False,
+                "error": logo_result.get('error', 'Failed to generate 3D logo')
+            }
+            
+    except Exception as e:
+        logger.error(f"Error generating 3D logo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/logo/suggestions")
+async def get_logo_suggestions(request: dict):
+    """Get suggested keywords for logo design"""
+    try:
+        from agents.identity.main import LogoGeneratorAgent
+        
+        business_description = request.get("business_description", "")
+        if not business_description:
+            raise HTTPException(status_code=400, detail="Business description is required")
+        
+        agent = LogoGeneratorAgent()
+        suggestions = agent.generate_suggested_keywords(business_description)
+        
+        if suggestions:
+            return {
+                "success": True,
+                "suggestions": suggestions
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to generate suggestions"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error generating logo suggestions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# BRAND NAME GENERATION ENDPOINT
+# =============================================================================
+
+@app.post("/logo/generate-names")
+async def generate_brand_names(request: dict):
+    """Generate brand name suggestions using AI"""
+    try:
+        from agents.identity.main import LogoGeneratorAgent
+        
+        business_description = request.get("business_description", "")
+        if not business_description:
+            raise HTTPException(status_code=400, detail="Business description is required")
+        
+        agent = LogoGeneratorAgent()
+        
+        # Use AI to generate brand name suggestions
+        name_prompt = f"""
+        Based on this business description: "{business_description}"
+        
+        Generate 8 creative, brandable business names that are:
+        - Short (1-3 words max)
+        - Memorable and catchy
+        - Professional sounding
+        - Relevant to the business
+        - Easy to pronounce
+        - Suitable for branding
+        
+        Return the response in this exact JSON format:
+        {{
+            "names": ["Name1", "Name2", "Name3", "Name4", "Name5", "Name6", "Name7", "Name8"]
+        }}
+        """
+        
+        response = agent.client.chat.completions.create(
+            model=agent.model,
+            messages=[{"role": "user", "content": name_prompt}],
+            temperature=0.8
+        )
+        
+        content = response.choices[0].message.content
+        # Extract JSON from the response
+        import json
+        import re
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            try:
+                name_data = json.loads(json_match.group())
+                if 'names' in name_data and len(name_data['names']) > 0:
+                    return {
+                        "success": True,
+                        "names": name_data['names']
+                    }
+            except json.JSONDecodeError:
+                pass
+        
+        # Fallback if JSON parsing fails
+        return {
+            "success": False,
+            "error": "Failed to generate brand names",
+            "names": []
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating brand names: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
 # HEALTH & ROOT ENDPOINTS
 # =============================================================================
 
@@ -985,6 +1885,9 @@ async def root():
             "bmc": "/bmc/run, /bmc/output",
             "image_generation": "/generate-image, /image-output",
             "swot_analysis": "/run-swot, /swot-output",
+            "brand_identity": "/run-brand-identity, /brand-identity/revise, /generate-brand-palettes",
+            "brand_discovery": "/brand-discovery/init, /brand-discovery/respond, /brand-discovery/suggestions, /brand-discovery/complete",
+            "logo_generation": "/logo/generate-palettes, /logo/generate, /logo/generate-3d, /logo/suggestions",
             "ideation": {
                 "POST /init": "Initialize a new session",
                 "POST /respond": "Submit response to any question by index and get next question",

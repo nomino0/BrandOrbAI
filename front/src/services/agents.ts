@@ -86,6 +86,17 @@ export async function runAllAgents(businessIdea: string): Promise<{ message: str
   return result;
 }
 
+export async function getBusinessSummary(): Promise<string> {
+  try {
+    const result = await getAgentOutput('business_summary');
+    return result.output;
+  } catch (error) {
+    // If no business summary file exists, return empty string
+    console.log('No business summary found:', error);
+    return '';
+  }
+}
+
 export async function getAgentOutput(agent: string): Promise<AgentOutput> {
   if (!agent) {
     throw new Error('Agent name is required');
@@ -676,6 +687,281 @@ export async function generateSummaryWithImage(sessionId: string): Promise<{ sum
   
   if (!response.ok) {
     throw new Error('Failed to generate summary with image');
+  }
+  
+  return response.json();
+}
+
+// Brand Identity Types and Functions
+export interface BrandChatbotData {
+  company_name: string;
+  brand_values: string[];
+  target_audience: string;
+  brand_personality: string;
+  visual_preferences: Record<string, any>;
+  voice_tone_preferences: string;
+  mission_input: string;
+  vision_input: string;
+}
+
+export interface BrandIdentityRequest {
+  business_summary: string;
+  chatbot_data?: BrandChatbotData;
+}
+
+export interface BrandIdentityResponse {
+  status: string;
+  message: string;
+  analysis_id: string;
+  data?: any;
+}
+
+export interface ColorPaletteRequest {
+  brand_name: string;
+  brand_personality: string;
+  target_audience: string;
+  style_preferences?: string;
+}
+
+export interface LogoConceptRequest {
+  brand_name: string;
+  industry: string;
+  brand_personality: string;
+  style_preferences?: string;
+}
+
+export interface LogoImageRequest {
+  concept: string;
+  brand_name: string;
+  style?: string;
+}
+
+export interface BrandAssetsRequest {
+  brand_name: string;
+  brand_colors: string[];
+  logo_style: string;
+  asset_types: string[];
+}
+
+// Run Brand Identity Analysis
+export async function runBrandIdentity(request: BrandIdentityRequest): Promise<BrandIdentityResponse> {
+  const response = await fetch(`${BACKEND_URL}/run-brand-identity`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to run brand identity analysis: ${response.status} - ${errorText}`);
+  }
+  
+  const result = await response.json();
+  
+  if (!result || result.status !== 'success') {
+    throw new Error('Brand identity analysis did not complete successfully');
+  }
+  
+  return result;
+}
+
+// Get Brand Identity Output
+export async function getBrandIdentityOutput(): Promise<{ content: any }> {
+  const response = await fetch(`${BACKEND_URL}/brand-identity-output`);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to get brand identity output: ${response.status} - ${errorText}`);
+  }
+  
+  const result = await response.json();
+  
+  // Return result even if content is null (no brand identity exists yet)
+  return result;
+}
+
+// Generate Brand Color Palettes
+export async function generateBrandPalettes(request: ColorPaletteRequest): Promise<{ palettes: any[] }> {
+  const response = await fetch(`${BACKEND_URL}/generate-brand-palettes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate brand palettes: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Generate Logo Concepts
+export async function generateLogoConcepts(request: LogoConceptRequest): Promise<{ concepts: any[] }> {
+  const response = await fetch(`${BACKEND_URL}/generate-logo-concepts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate logo concepts: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Generate Logo Image
+export async function generateLogoImage(request: LogoImageRequest): Promise<{ image_url: string; filename: string }> {
+  const response = await fetch(`${BACKEND_URL}/generate-logo-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate logo image: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Generate Brand Assets
+export async function generateBrandAssets(request: BrandAssetsRequest): Promise<{ assets: any[] }> {
+  const response = await fetch(`${BACKEND_URL}/generate-brand-assets`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate brand assets: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// List Available Brand Identity Analyses
+export async function listBrandIdentityAnalyses(): Promise<{ analyses: any[] }> {
+  const response = await fetch(`${BACKEND_URL}/brand-identity-list`);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to list brand identity analyses: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// =============================================
+// Logo Generation API Functions
+// =============================================
+
+export interface LogoColorPalette {
+  name: string;
+  colors: string[];
+  description: string;
+  mood: string;
+}
+
+export interface LogoSuggestion {
+  suggested_styles: string[];
+  suggested_keywords: string[];
+  style_descriptions: Record<string, string>;
+}
+
+export interface LogoGenerationRequest {
+  business_description: string;
+  logo_description: string;
+  color_palette: string[];
+  style?: string;
+}
+
+export interface LogoGenerationResponse {
+  success: boolean;
+  url?: string;
+  prompt?: string;
+  error?: string;
+}
+
+// Generate Brand Names
+export async function generateBrandNames(business_description: string): Promise<{ success: boolean; names: string[] }> {
+  const response = await fetch(`${BACKEND_URL}/logo/generate-names`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ business_description }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate brand names: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Generate Color Palettes for Logo
+export async function generateLogoPalettes(business_description: string): Promise<{ success: boolean; palettes: { palettes: LogoColorPalette[] } }> {
+  const response = await fetch(`${BACKEND_URL}/logo/generate-palettes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ business_description }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate logo palettes: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Generate Logo Suggestions
+export async function generateLogoSuggestions(business_description: string): Promise<{success: boolean, suggestions: LogoSuggestion}> {
+  const response = await fetch(`${BACKEND_URL}/logo/suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ business_description }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate logo suggestions: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Generate Logo
+export async function generateLogo(request: LogoGenerationRequest): Promise<LogoGenerationResponse> {
+  const response = await fetch(`${BACKEND_URL}/logo/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate logo: ${response.status} - ${errorText}`);
+  }
+  
+  return response.json();
+}
+
+// Generate 3D Logo
+export async function generate3DLogo(request: LogoGenerationRequest): Promise<LogoGenerationResponse> {
+  const response = await fetch(`${BACKEND_URL}/logo/generate-3d`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to generate 3D logo: ${response.status} - ${errorText}`);
   }
   
   return response.json();

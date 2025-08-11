@@ -17,3 +17,7 @@ python-magic==0.4.27
 aiofiles==23.2.1
 websockets==12.0
 Pillow==10.0.0
+streamlit>=1.28.0
+colorsys==0.1.10
+
+

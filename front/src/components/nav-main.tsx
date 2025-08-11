@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Spinner, Lock, ChevronRight, type Icon } from "@mynaui/icons-react"
+import { Check, Spinner, Lock, ChevronRight, Play, type Icon } from "@mynaui/icons-react"
 import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
@@ -24,13 +24,13 @@ function getStatusIcon(status: string, isDark: boolean) {
     case "completed":
       return <Check className={`h-4 w-4 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
     case "available":
-      return <Spinner className={`h-4 w-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+      return <Play className={`h-4 w-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
     case "in_progress":
       return <Spinner className={`h-4 w-4 ${isDark ? 'text-blue-400' : 'text-blue-600'} animate-spin`} />
     case "locked":
       return <Lock className={`h-4 w-4 ${isDark ? 'text-slate-500' : 'text-slate-400'}`} />
     default:
-      return null
+      return <Play className={`h-4 w-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
   }
 }
 
@@ -81,10 +81,12 @@ export function NavMain({
       return
     }
     
-    // If item is available, mark it as completed and navigate
+    // If item is available, mark it as completed when they start working on it
+    // For brand identity, we'll mark it as completed only after they generate the brand identity
     if (item.status === 'available') {
       const stepKey = getStepKey(item.title)
-      if (stepKey) {
+      if (stepKey && stepKey !== 'brand_identity') {
+        // Don't mark brand identity as completed on click, only after generation
         markStepAsCompleted(stepKey)
       }
     }
@@ -129,7 +131,13 @@ export function NavMain({
       return "text-sidebar-foreground cursor-default"
     }
     
-    return "hover:bg-sidebar-accent/50 text-sidebar-foreground"
+    // If item is locked, make it non-clickable and dim
+    if (item.status === 'locked') {
+      return "text-muted-foreground cursor-not-allowed opacity-60"
+    }
+    
+    // Available and completed items should be fully interactive
+    return "hover:bg-sidebar-accent/50 text-sidebar-foreground cursor-pointer"
   }
 
   const getIconStyles = (item: any) => {
@@ -139,6 +147,12 @@ export function NavMain({
       return "text-primary"
     }
     
+    // Locked items should be dimmed
+    if (item.status === 'locked') {
+      return "text-muted-foreground"
+    }
+    
+    // Available and completed items should be normal
     return "text-muted-foreground"
   }
 
@@ -163,8 +177,10 @@ export function NavMain({
         return "In Progress"
       case "locked":
         return "Locked"
+      case "available":
+        return "Ready"
       default:
-        return "Available"
+        return "Ready"
     }
   }
 
@@ -182,11 +198,13 @@ export function NavMain({
                 <CollapsibleTrigger asChild>
                   <SidebarMenuButton 
                     tooltip={item.title}
-                    className={`w-full h-14 px-3 rounded-lg transition-all duration-200 ${getItemStyles(item)}`}
-                    asChild={!!item.url}
+                    className={`w-full h-14 px-3 rounded-lg transition-all duration-200 ${getItemStyles(item)} ${
+                      item.status === 'locked' ? 'pointer-events-none' : ''
+                    }`}
+                    asChild={!!item.url && item.status !== 'locked'}
                   >
-                    {item.url ? (
-                      <a href={item.url} className="flex items-center gap-3 w-full">
+                    {item.url && item.status !== 'locked' ? (
+                      <a href={item.url} className="flex items-center gap-3 w-full" onClick={(e) => handleItemClick(item, e)}>
                         <div className="flex items-center gap-3 flex-1">
                           {item.icon && (
                             <item.icon className={`h-5 w-5 shrink-0 ${getIconStyles(item)}`} />
@@ -243,24 +261,38 @@ export function NavMain({
                       {item.items.map((subItem, index) => (
                         <SidebarMenuSubItem key={subItem.title} className="relative">
                           <SidebarMenuSubButton asChild>
-                            <a 
-                              href={subItem.url} 
-                              className={`flex items-center gap-3 w-full h-10 px-3 rounded-md transition-all duration-200 group ${
-                                isCurrentPage(subItem.url)
-                                  ? 'bg-white dark:bg-muted text-gray-900 dark:text-foreground border border-border/20 dark:border-border'
-                                  : 'hover:bg-sidebar-accent/30'
-                              }`}
-                            >
-                              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
-                                {index + 1}.
-                              </span>
-                              <span className="truncate flex-1 text-sm group-hover:text-foreground transition-colors">
-                                {subItem.title}
-                              </span>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {getStatusIcon(subItem.status || "", resolvedTheme === 'dark')}
+                            {subItem.status !== 'locked' ? (
+                              <a 
+                                href={subItem.url} 
+                                className={`flex items-center gap-3 w-full h-10 px-3 rounded-md transition-all duration-200 group ${
+                                  isCurrentPage(subItem.url)
+                                    ? 'bg-white dark:bg-muted text-gray-900 dark:text-foreground border border-border/20 dark:border-border'
+                                    : 'hover:bg-sidebar-accent/30'
+                                }`}
+                              >
+                                <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                                  {index + 1}.
+                                </span>
+                                <span className="truncate flex-1 text-sm group-hover:text-foreground transition-colors">
+                                  {subItem.title}
+                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {getStatusIcon(subItem.status || "", resolvedTheme === 'dark')}
+                                </div>
+                              </a>
+                            ) : (
+                              <div className={`flex items-center gap-3 w-full h-10 px-3 rounded-md cursor-not-allowed opacity-60 text-muted-foreground`}>
+                                <span className="text-xs text-muted-foreground">
+                                  {index + 1}.
+                                </span>
+                                <span className="truncate flex-1 text-sm">
+                                  {subItem.title}
+                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {getStatusIcon(subItem.status || "", resolvedTheme === 'dark')}
+                                </div>
                               </div>
-                            </a>
+                            )}
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}

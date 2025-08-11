@@ -64,17 +64,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const marketData = localStorage.getItem('brandorb_market_data');
         const swotData = localStorage.getItem('brandorb_swot_data');
         const bmcData = localStorage.getItem('brandorb_bmc_data');
+        const brandIdentityData = localStorage.getItem('brandorb_brand_identity_data');
         
         // Update status based on actual data
         const dataBasedStatus = { ...status };
         if (financialData && marketData) {
           dataBasedStatus.viability_assessment = 'completed';
+          // After viability assessment is completed, unlock SWOT
+          if (dataBasedStatus.swot_analysis === 'locked') {
+            dataBasedStatus.swot_analysis = 'available';
+          }
         }
         if (swotData) {
           dataBasedStatus.swot_analysis = 'completed';
+          // After SWOT is completed, unlock BMC
+          if (dataBasedStatus.bmc === 'locked') {
+            dataBasedStatus.bmc = 'available';
+          }
         }
         if (bmcData) {
           dataBasedStatus.bmc = 'completed';
+          // After BMC is completed, unlock Brand Identity
+          if (!brandIdentityData) {
+            dataBasedStatus.brand_identity = 'available';
+          }
+        }
+        if (brandIdentityData) {
+          dataBasedStatus.brand_identity = 'completed';
+          // After Brand Identity is completed, unlock Marketing Strategy
+          if (dataBasedStatus.marketing_strategy === 'locked') {
+            dataBasedStatus.marketing_strategy = 'available';
+          }
         }
         
         setWorkflowStatus(dataBasedStatus);
@@ -130,7 +150,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       },
       {
         title: "Brand Identity",
-        url: "/dashboard/identity",
+        url: "/dashboard/brand-identity",
         icon: Target,
         status: workflowStatus?.brand_identity || "locked",
         items: [],

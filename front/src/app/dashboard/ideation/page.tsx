@@ -23,6 +23,24 @@ const bentoColors = [
   "bg-green-100/60 dark:bg-green-900/10",
 ];
 
+function extractTitlesFromSummary(summary: string): { businessTitle: string; shortTitle: string } {
+  if (!summary) return { businessTitle: '', shortTitle: '' };
+  
+  const lines = summary.split('\n');
+  let businessTitle = '';
+  let shortTitle = '';
+  
+  for (const line of lines) {
+    if (line.startsWith('**Business Title:**')) {
+      businessTitle = line.replace('**Business Title:**', '').trim();
+    } else if (line.startsWith('**Short Title:**')) {
+      shortTitle = line.replace('**Short Title:**', '').trim();
+    }
+  }
+  
+  return { businessTitle, shortTitle };
+}
+
 function parseSummaryToBlocks(summary: string): { title: string; content: string }[] {
   const blocks: { title: string; content: string }[] = [];
   
@@ -429,6 +447,10 @@ export default function IdeationPage() {
     // Remove "Business Summary: Pet ecommerce Platform" section
     content = content.replace(/\*\*Business Summary: {title}\*\*/gi, '');
     
+    // Remove the title lines from the content (they'll be displayed separately)
+    content = content.replace(/\*\*Business Title:\*\*[^\n]*\n?/gi, '');
+    content = content.replace(/\*\*Short Title:\*\*[^\n]*\n?/gi, '');
+    
     // Remove the Generated Visual Assets section (this is metadata, not for display)
     content = content.replace(/\n\n---\n\n## Generated Visual Assets[\s\S]*?$/, '');
     
@@ -437,6 +459,14 @@ export default function IdeationPage() {
     
     return content;
   }, [savedSummary]);
+
+  // Extract titles from summary
+  const { businessTitle, shortTitle } = useMemo(() => {
+    return extractTitlesFromSummary(savedSummary || '');
+  }, [savedSummary]);
+
+  // Use short title if available, fallback to business title, then savedBusinessIdea
+  const displayTitle = shortTitle || businessTitle || savedBusinessIdea || "Your Business Idea";
 
   const handleValidate = useCallback(async () => {
     // This will be handled by the ButtomBar component
@@ -507,7 +537,7 @@ export default function IdeationPage() {
             {/* Header skeleton */}
             <div className="w-full max-w-4xl mx-auto">
               <Card className="rounded-xl shadow-sm border border-border/50 bg-background overflow-hidden p-0">
-                <div className="relative h-64 bg-muted animate-pulse rounded-xl flex items-center justify-center">
+                <div className="relative h-80 md:h-96 bg-muted animate-pulse rounded-xl flex items-center justify-center">
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-background/30 to-transparent animate-shimmer" />
                   <div className="flex flex-col items-center justify-center h-full space-y-4 relative z-10">
                     <div className="h-12 w-12 bg-muted-foreground/20 animate-pulse rounded-lg"></div>
@@ -612,7 +642,7 @@ export default function IdeationPage() {
             <div className="w-full max-w-4xl mx-auto mb-6">
               <Card className="rounded-xl shadow-sm border border-border/50 bg-background overflow-hidden p-0">
                 <div 
-                  className="relative h-64 bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center rounded-xl"
+                  className="relative h-80 md:h-96 bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center rounded-xl"
                   style={{
                     backgroundImage: backgroundImage && !imageLoading ? `url(${backgroundImage})` : undefined,
                     backgroundSize: 'cover',
@@ -672,7 +702,7 @@ export default function IdeationPage() {
                   {/* Content overlay */}
                   <div className="relative z-10 text-center">
                     <h2 className={`text-2xl font-bold mb-2 ${backgroundImage && !imageLoading ? 'text-white drop-shadow-lg' : 'text-foreground'}`}>
-                      {savedBusinessIdea || "Your Business Idea"}
+                      {displayTitle}
                     </h2>
                     <p className={`text-sm ${backgroundImage && !imageLoading ? 'text-white/90 drop-shadow' : 'text-muted-foreground'}`}>
                       Generated on {new Date().toLocaleDateString()}

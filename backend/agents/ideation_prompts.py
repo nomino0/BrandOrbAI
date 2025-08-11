@@ -126,7 +126,13 @@ BUSINESS IDEA:
 Q&A ANALYSIS:
 {qa_history}
 
-Based on the business idea description and the comprehensive Q&A analysis above, generate a detailed and insightful summary that covers:
+Based on the business idea description and the comprehensive Q&A analysis above, generate a detailed and insightful summary with the following structure:
+
+**IMPORTANT: Start your response with these two title lines:**
+**Business Title:** [Original detailed business idea title]
+**Short Title:** [Concise 3-5 word version of the business idea]
+
+Then continue with the full summary that covers:
 
 1. **Business Overview**: Clear description of what the business does and its core value proposition
 2. **Market Analysis**: Target market, market size, customer segments, and competitive landscape

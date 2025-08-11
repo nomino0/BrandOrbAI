@@ -1,27 +1,27 @@
 Key Partners:
-Accounting and financial services firms, Potential partners for integration and distribution
+Educational institutions, companies, instructors, content creators
 
 Key Activities:
-Development and maintenance of the mobile application, Marketing and user acquisition, Financial forecasting and data analysis
+Developing and maintaining the e-learning platform, creating and curating high-quality content, marketing and promoting the platform, establishing partnerships with educational institutions and companies
 
 Key Resources:
-Development team, Marketing team, Financial experts, Technology infrastructure
+Development team, marketing team, customer support team, servers, software, and technology infrastructure
 
 Value Propositions:
-Smart financial forecasting platform for SMEs, Providing tailored financial solutions for SMEs in the Italian service industry
+Comprehensive and accessible online learning experience for Python programming, focus on accessibility and user experience, high-quality content and instructors
 
 Customer Relationships:
-User-friendly onboarding process, Excellent customer support, Personalized financial insights
+Personalized learning experience, community support, regular updates and feedback
 
 Channels:
-Mobile application, Online marketing campaigns, Social media, Partnerships with accounting and financial services firms
+Social media, targeted advertising, partnerships with educational institutions and companies, online marketing campaigns
 
 Customer Segments:
-SMEs in the Italian service industry, Young adults, Professionals
+Young adults, professionals, individuals interested in learning Python programming
 
 Cost Structure:
-Development and maintenance costs, Marketing and user acquisition costs, Salaries and benefits for the founding team, Technology and infrastructure expenses
+Team salaries and compensation, customer acquisition costs, cloud infrastructure and software tools, marketing expenses
 
 Revenue Streams:
-Subscription fees, Advertising, Potential revenue from partnerships with financial institutions
+Subscription fees from customers, potential revenue from advertising
 
