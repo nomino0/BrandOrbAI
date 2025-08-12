@@ -20,8 +20,8 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
   const [mounted, setMounted] = useState(false);
   const [brandData, setBrandData] = useState({
     name: '',
-    personality: [],
-    colors: [],
+    personality: [] as string[],
+    colors: [] as string[],
     logoUrl: '',
     customDescription: ''
   });
@@ -37,6 +37,7 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
   const [selectedPalette, setSelectedPalette] = useState<any>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [logoRetryCount, setLogoRetryCount] = useState(0);
+  const [hasSettingsChanged, setHasSettingsChanged] = useState(false);
 
   // Custom name input
   const [customNamePrompt, setCustomNamePrompt] = useState('');
@@ -62,15 +63,7 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
     // Don't auto-load names - wait for user to click
   }, []);
 
-  // Auto-generate logo only when all requirements are met
-  useEffect(() => {
-    if (brandData.name && brandData.colors.length > 0 && brandData.personality.length > 0 && mounted) {
-      const timer = setTimeout(() => {
-        generateLogoAutomatically();
-      }, 1000); // 1 second debounce
-      return () => clearTimeout(timer);
-    }
-  }, [brandData.name, brandData.colors, brandData.personality, brandData.customDescription, mounted]);
+
 
   // Auto-load color palettes when brand name changes
   useEffect(() => {
@@ -81,6 +74,14 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
       return () => clearTimeout(timer);
     }
   }, [brandData.name, mounted]);
+
+  // Track when settings change to enable logo generation button
+  useEffect(() => {
+    if (brandData.name && brandData.colors.length > 0 && brandData.personality.length > 0) {
+      setHasSettingsChanged(true);
+      setLogoError(null); // Clear any previous errors when settings change
+    }
+  }, [brandData.name, brandData.colors, brandData.personality, brandData.customDescription]);
 
   const loadBrandNames = async () => {
     try {
@@ -150,13 +151,17 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
     }
   };
 
-  const generateLogoAutomatically = async () => {
-    if (!brandData.name || !brandData.colors.length || !brandData.personality.length) return;
+  const generateLogoManually = async () => {
+    if (!brandData.name || !brandData.colors.length || !brandData.personality.length) {
+      toast.error('Please complete all required sections before generating a logo');
+      return;
+    }
 
     try {
       setIsLoadingLogo(true);
       setLogoError(null);
       setLogoRetryCount(prev => prev + 1);
+      setHasSettingsChanged(false); // Reset settings changed state
       
       const businessDescription = `${brandData.name}: ${businessData?.summary || ""}`;
       const logoDescription = brandData.customDescription || 
@@ -169,7 +174,7 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
       });
 
       if (logoData.success && logoData.url) {
-        setBrandData(prev => ({ ...prev, logoUrl: logoData.url }));
+        setBrandData(prev => ({ ...prev, logoUrl: logoData.url || '' }));
         toast.success('Logo generated successfully!');
       } else {
         const errorMsg = logoData.error || 'Failed to generate logo';
@@ -195,11 +200,12 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
   };
 
   const retryLogoGeneration = () => {
-    generateLogoAutomatically();
+    generateLogoManually();
   };
 
   const handleNameSelection = useCallback((name: string) => {
     setBrandData(prev => ({ ...prev, name }));
+    setHasSettingsChanged(true);
   }, []);
 
   const togglePersonality = useCallback((personality: string) => {
@@ -209,15 +215,18 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
         : [...prev.personality, personality];
       return { ...prev, personality: newPersonalities };
     });
+    setHasSettingsChanged(true);
   }, []);
 
   const selectColorPalette = useCallback((palette: any) => {
     setSelectedPalette(palette);
     setBrandData(prev => ({ ...prev, colors: palette.colors }));
+    setHasSettingsChanged(true);
   }, []);
 
   const handleCustomDescriptionChange = useCallback((description: string) => {
     setBrandData(prev => ({ ...prev, customDescription: description }));
+    setHasSettingsChanged(true);
   }, []);
 
   const canComplete = useMemo(() => {
@@ -296,7 +305,35 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                         onChange={(e) => handleNameSelection(e.target.value)}
                         className="flex-1"
                       />
+                      <Button
+                        onClick={() => {
+                          const currentName = brandData.name;
+                          if (currentName && !brandNames.includes(currentName)) {
+                            toast.success(`Brand name "${currentName}" confirmed!`);
+                            setHasSettingsChanged(true);
+                          }
+                        }}
+                        disabled={!brandData.name || brandNames.includes(brandData.name) || isLoadingLogo}
+                        size="sm"
+                        variant={brandData.name && !brandNames.includes(brandData.name) ? "default" : "outline"}
+                        className="px-4"
+                      >
+                        {brandData.name && !brandNames.includes(brandData.name) ? (
+                          <>
+                            <Sparkles className="w-3 h-3 mr-1" />
+                            Confirm
+                          </>
+                        ) : (
+                          'Confirm'
+                        )}
+                      </Button>
                     </div>
+                    
+                    {brandData.name && !brandNames.includes(brandData.name) && (
+                      <div className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <span>✓ Custom name ready to confirm</span>
+                      </div>
+                    )}
                     
                     <div className="border-t border-border pt-4">
                       <p className="text-sm font-medium mb-2">Or generate names with AI:</p>
@@ -306,10 +343,11 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                           value={customNamePrompt}
                           onChange={(e) => setCustomNamePrompt(e.target.value)}
                           className="flex-1"
+                          disabled={isLoadingLogo}
                         />
                         <Button
                           onClick={generateCustomNames}
-                          disabled={isLoadingNames || !customNamePrompt.trim()}
+                          disabled={isLoadingNames || !customNamePrompt.trim() || isLoadingLogo}
                           size="sm"
                           className="bg-primary hover:bg-primary/90 text-white"
                         >
@@ -321,12 +359,12 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                         </Button>
                       </div>
                       
-                      <div className="flex gap-2 mt-2">
+                      <div className="flex pt-4 gap-2 mt-2">
                         <Button
                           onClick={loadBrandNames}
                           variant="outline"
                           size="sm"
-                          disabled={isLoadingNames}
+                          disabled={isLoadingNames || isLoadingLogo}
                         >
                           {isLoadingNames ? (
                             <>
@@ -336,7 +374,7 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                           ) : (
                             <>
                               <Wand2 className="w-4 h-4 mr-2" />
-                              Generate from Business
+                              Suggest Names Randomly
                             </>
                           )}
                         </Button>
@@ -367,6 +405,7 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                               variant={brandData.name === name ? "default" : "outline"}
                               onClick={() => handleNameSelection(name)}
                               className="w-full h-auto p-3 justify-start text-sm font-medium"
+                              disabled={isLoadingLogo}
                             >
                               {name}
                             </Button>
@@ -454,9 +493,32 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                     </div>
                     <span className="text-surface">Color Palette</span>
                   </CardTitle>
-                  <p className="text-sm text-surface-muted">
-                    Choose colors that reflect your brand
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-surface-muted">
+                      Choose colors that reflect your brand
+                    </p>
+                    {colorPalettes.length > 0 && (
+                      <Button
+                        onClick={loadColorPalettes}
+                        variant="outline"
+                        size="sm"
+                        disabled={isLoadingPalettes || !brandData.name}
+                        className="text-xs"
+                      >
+                        {isLoadingPalettes ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Regenerating...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                            Regenerate
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 
                 <CardContent>
@@ -542,16 +604,41 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                 </CardHeader>
                 
                 <CardContent>
-                  <Textarea
-                    placeholder="e.g., minimalist mountain icon, modern geometric design, elegant script font..."
-                    value={brandData.customDescription}
-                    onChange={(e) => handleCustomDescriptionChange(e.target.value)}
-                    rows={3}
-                    className="resize-none"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    The logo will generate when you complete all required sections
-                  </p>
+                  <div className="space-y-3">
+                    <Textarea
+                      placeholder="e.g., minimalist mountain icon, modern geometric design, elegant script font..."
+                      value={brandData.customDescription}
+                      onChange={(e) => handleCustomDescriptionChange(e.target.value)}
+                      rows={3}
+                      className="resize-none"
+                    />
+                    
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Describe your preferred logo style and design elements
+                      </p>
+                      {brandData.customDescription.trim() && (
+                        <Button
+                          onClick={() => {
+                            toast.success('Logo style preferences saved!');
+                            setHasSettingsChanged(true);
+                          }}
+                          size="sm"
+                          variant="default"
+                          className="text-xs bg-emerald-600 hover:bg-emerald-700"
+                        >
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          Apply Style
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {brandData.customDescription.trim() && (
+                      <div className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <span>✓ Style preferences: "{brandData.customDescription.slice(0, 50)}{brandData.customDescription.length > 50 ? '...' : ''}"</span>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
@@ -576,7 +663,7 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                       <span className="text-surface">Live Logo Preview</span>
                     </CardTitle>
                     <p className="text-sm text-surface-muted">
-                      Your logo updates automatically as you make changes
+                      Click the button below to generate your logo
                     </p>
                   </CardHeader>
                   <CardContent>
@@ -653,16 +740,58 @@ export default function BrandWizard({ businessData, onComplete }: BrandWizardPro
                                 {!brandData.name ? 'Enter your brand name to start' :
                                  !brandData.personality.length ? 'Select personality traits' :
                                  !brandData.colors.length ? 'Choose a color palette' :
-                                 'Logo will generate when ready'}
+                                 'Click "Generate Logo" button to create your logo'}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Complete all required sections to generate your logo
+                                Complete all sections and click the generate button
                               </p>
                             </div>
                           </div>
                         </div>
                       )}
                     </div>
+
+                    {/* Generate Logo Button */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                      className="mt-6"
+                    >
+                      <Button
+                        onClick={generateLogoManually}
+                        disabled={!brandData.name || !brandData.colors.length || !brandData.personality.length || isLoadingLogo}
+                        className={`w-full transition-all duration-300 ${
+                          hasSettingsChanged && brandData.name && brandData.colors.length && brandData.personality.length
+                            ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg animate-pulse' 
+                            : 'bg-primary hover:bg-primary/90 text-white'
+                        }`}
+                        size="lg"
+                      >
+                        {isLoadingLogo ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Generating Logo...
+                          </>
+                        ) : hasSettingsChanged && brandData.name && brandData.colors.length && brandData.personality.length ? (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Regenerate Logo
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4 mr-2" />
+                            Generate Logo
+                          </>
+                        )}
+                      </Button>
+                      
+                      {(!brandData.name || !brandData.colors.length || !brandData.personality.length) && (
+                        <p className="text-xs text-muted-foreground mt-2 text-center">
+                          Complete all required sections to generate your logo
+                        </p>
+                      )}
+                    </motion.div>
 
                     {/* Brand Summary */}
                     <motion.div 

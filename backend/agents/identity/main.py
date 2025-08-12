@@ -74,6 +74,8 @@ class LogoGeneratorAgent:
         
         # Convert hex colors to color names for better prompt understanding
         color_names = []
+        hex_color_specs = []
+        
         for hex_color in selected_colors:
             color_name_prompt = f"""
             Convert this hex color {hex_color} to a descriptive color name.
@@ -88,10 +90,19 @@ class LogoGeneratorAgent:
             
             color_name = color_response.choices[0].message.content.strip().lower()
             color_names.append(color_name)
+            hex_color_specs.append(f"{color_name} ({hex_color})")
         
-        # Create a comprehensive color description
+        # Create a comprehensive color description with exact hex values
         colors_description = ", ".join(color_names)
+        hex_colors_list = ", ".join(selected_colors)
+        color_specifications = " | ".join(hex_color_specs)
         primary_color = color_names[0] if color_names else "blue"
+        
+        # Define default logo type specification (emblem + typography)
+        selected_type_spec = {
+            "description": "Combined emblem + typography logo",
+            "requirements": "Create both an emblem/icon AND typography. Position the emblem on the LEFT and typography on the RIGHT. Or creatively integrate the first letter into the emblem design."
+        }
         
         # Extract business name from description using AI
         business_name_prompt = f"""
@@ -129,31 +140,50 @@ class LogoGeneratorAgent:
             )
             business_name = fallback_response.choices[0].message.content.strip().lower().replace(" ", "")[:8]
         
-        # Generate completely dynamic prompt using QWEN with specific colors
+        # Generate completely dynamic prompt using QWEN with specific colors and logo type
         dynamic_prompt = f"""
-        Create a detailed Pollinations AI prompt for generating a professional logo with these specifications:
+        You are an expert graphic designer and prompt engineer. Create a detailed Pollinations AI prompt for generating a professional logo with these EXACT specifications:
         
-        Business: "{business_description}"
-        Style Description: "{logo_description}"
-        Color Palette: {colors_description}
-        Hex Colors: {selected_colors}
-        Business Name: {business_name}
+        BUSINESS CONTEXT:
+        - Business: "{business_description}"
+        - Style Description: "{logo_description}"
+        - Business Name: "{business_name}"
         
-        Requirements:
-        1. Create a flat, high-resolution logo design
-        2. Use EXACTLY these colors: {colors_description} (hex: {selected_colors})
-        3. The logo MUST prominently feature these specific colors
-        4. Include the business name "{business_name}" if appropriate
-        5. White background
-        6. Professional and clean design
-        7. Single element, block design
-        8. Suitable for branding and scaling
+        LOGO TYPE REQUIREMENTS:
+        - Type: {selected_type_spec['description']}
+        - Specific Requirements: {selected_type_spec['requirements']}
         
-        IMPORTANT: The logo must use the exact color palette provided. Make sure the colors {colors_description} are the dominant colors in the design.
+        COLOR SPECIFICATIONS (CRITICAL - MUST BE FOLLOWED EXACTLY):
+        - Primary Colors: {colors_description}
+        - Exact Hex Values: {hex_colors_list}
+        - Color Mapping: {color_specifications}
+        - MANDATORY: Use ONLY these exact hex color codes: {hex_colors_list}
+        - The logo MUST prominently feature these EXACT shades: {color_specifications}
+        - NO other colors allowed except these specific hex values and white for background
         
-        Generate a creative and detailed prompt that will produce the best possible logo for this business using the specified colors.
+        TECHNICAL REQUIREMENTS:
+        1. Create a flat, high-resolution logo design (1024x1024)
+        2. Use EXCLUSIVELY the provided hex colors: {hex_colors_list}
+        3. White or transparent background ONLY
+        4. Professional, clean, and scalable design
+        5. Single cohesive design element
+        6. Suitable for branding across all media
+        7. Crisp, vector-style appearance
         
-        Return ONLY the final prompt for the AI image generator, nothing else.
+        DESIGN APPROACH:
+        Think like a professional graphic designer and create a prompt that will result in:
+        - Perfect color accuracy using the exact hex values provided
+        - Appropriate combined emblem + typography execution
+        - Brand-appropriate styling that matches the business description
+        - Professional execution suitable for corporate branding
+        
+        CRITICAL COLOR ENFORCEMENT:
+        The AI image generator MUST use these EXACT colors: {hex_colors_list}. 
+        Emphasize in the prompt that color accuracy is paramount and these specific hex values must be matched precisely.
+        
+        Generate a detailed, creative prompt that will produce the perfect logo using the specified colors and default logo type.
+        
+        Return ONLY the final optimized prompt for the AI image generator, nothing else.
         """
         
         # Get completely dynamic prompt from QWEN
@@ -165,8 +195,11 @@ class LogoGeneratorAgent:
         
         enhanced_prompt = response.choices[0].message.content.strip()
         
-        # Ensure the specific colors are strongly emphasized in the prompt
-        enhanced_prompt = f"{enhanced_prompt} using color palette: {colors_description}, with hex colors {selected_colors}"
+        # Ensure the specific colors and logo type are strongly emphasized in the prompt
+        color_enforcement = f"using EXACT hex colors {hex_colors_list}, color specifications: {color_specifications}"
+        logo_type_enforcement = f"following {selected_type_spec['description']} requirements"
+        
+        enhanced_prompt = f"{enhanced_prompt} | {color_enforcement} | {logo_type_enforcement}"
         
         if business_name not in enhanced_prompt.lower() and len(business_name) < 10:
             enhanced_prompt = f"{enhanced_prompt} featuring {business_name} text"
@@ -179,6 +212,8 @@ class LogoGeneratorAgent:
         
         # Convert hex colors to color names for better 3D rendering
         color_names = []
+        hex_color_specs = []
+        
         for hex_color in selected_colors:
             color_name_prompt = f"""
             Convert this hex color {hex_color} to a descriptive color name for 3D rendering.
@@ -193,10 +228,19 @@ class LogoGeneratorAgent:
             
             color_name = color_response.choices[0].message.content.strip().lower()
             color_names.append(color_name)
+            hex_color_specs.append(f"{color_name} ({hex_color})")
         
-        # Create a comprehensive color description
+        # Create a comprehensive color description with exact hex values
         colors_description = ", ".join(color_names)
+        hex_colors_list = ", ".join(selected_colors)
+        color_specifications = " | ".join(hex_color_specs)
         primary_color = color_names[0] if color_names else "blue"
+        
+        # Define default logo type specification (emblem + typography)
+        selected_type_spec = {
+            "description": "Combined emblem + typography logo",
+            "requirements": "Create both an emblem/icon AND typography. Position the emblem on the LEFT and typography on the RIGHT. Or creatively integrate the first letter into the emblem design."
+        }
         
         # Extract business name (same logic as regular logo)
         business_name_prompt = f"""
