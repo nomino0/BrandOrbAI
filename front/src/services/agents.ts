@@ -966,3 +966,164 @@ export async function generate3DLogo(request: LogoGenerationRequest): Promise<Lo
   
   return response.json();
 }
+
+// =============================================
+// Vectorization API Functions
+// =============================================
+
+export interface VectorizationRequest {
+  imageUrl: string;
+  mode?: 'production' | 'preview' | 'test' | 'test_preview';
+  maxColors?: number;
+  outputFormat?: 'svg' | 'eps' | 'pdf' | 'dxf' | 'png';
+}
+
+export interface VectorizationResponse {
+  success: boolean;
+  vectorizedUrl?: string;
+  error?: string;
+}
+
+// Vectorize image using Vectorizer.AI
+export async function vectorizeImage(request: VectorizationRequest): Promise<VectorizationResponse> {
+  try {
+    // This would be implemented in the backend to avoid CORS issues
+    const response = await fetch(`${BACKEND_URL}/vectorize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Vectorization failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Vectorization error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+// =============================================
+// Stock Images API Functions (Pexels)
+// =============================================
+
+export interface StockImageRequest {
+  query: string;
+  perPage?: number;
+  page?: number;
+  orientation?: 'landscape' | 'portrait' | 'square';
+}
+
+export interface StockImageResponse {
+  photos: Array<{
+    id: number;
+    url: string;
+    src: {
+      original: string;
+      large2x: string;
+      large: string;
+      medium: string;
+      small: string;
+      portrait: string;
+      landscape: string;
+      tiny: string;
+    };
+    photographer: string;
+    photographer_url: string;
+    alt: string;
+  }>;
+  total_results: number;
+  page: number;
+  per_page: number;
+}
+
+// Get stock images from Pexels
+export async function getStockImages(request: StockImageRequest): Promise<StockImageResponse> {
+  const response = await fetch(`${BACKEND_URL}/stock-images`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch stock images: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// =============================================
+// Mockup Generation API Functions
+// =============================================
+
+export interface MockupRequest {
+  logoUrl: string;
+  mockupTypes?: string[];
+  brandColors?: string[];
+}
+
+export interface MockupResponse {
+  mockups: Array<{
+    id: string;
+    name: string;
+    imageUrl: string;
+    downloadUrl: string;
+  }>;
+  success: boolean;
+  error?: string;
+}
+
+// Generate mockups using Dynamic Mockups
+export async function generateMockups(request: MockupRequest): Promise<MockupResponse> {
+  const response = await fetch(`${BACKEND_URL}/mockups/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to generate mockups: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// =============================================
+// Brand Guidelines Export Functions
+// =============================================
+
+export interface BrandGuidelinesExportRequest {
+  brandData: {
+    name: string;
+    colors: string[];
+    personality: string[];
+    logoUrl?: string;
+    vectorizedLogoUrl?: string;
+    businessSummary?: string;
+    customDescription?: string;
+  };
+  format: 'pdf' | 'html' | 'json';
+}
+
+export interface BrandGuidelinesExportResponse {
+  success: boolean;
+  downloadUrl?: string;
+  error?: string;
+}
+
+// Export brand guidelines
+export async function exportBrandGuidelines(request: BrandGuidelinesExportRequest): Promise<BrandGuidelinesExportResponse> {
+  const response = await fetch(`${BACKEND_URL}/brand-guidelines/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to export brand guidelines: ${response.statusText}`);
+  }
+
+  return response.json();
+}

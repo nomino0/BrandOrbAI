@@ -3,8 +3,11 @@ import os
 import json
 import logging
 import uuid
+import base64
+import requests
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from io import BytesIO
 import sys
 import os
 import logging
@@ -44,6 +47,9 @@ from agents.ideation_agents import (
     reset_questions,
 )
 
+# Import vectorization service
+from agents.identity.vectorization_api import vectorization_router
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -60,6 +66,9 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = FastAPI(title="BrandOrbAI Unified API", version="1.0.0")
+
+# Include routers
+app.include_router(vectorization_router)
 
 # Add CORS middleware
 app.add_middleware(
@@ -1888,6 +1897,8 @@ async def root():
             "brand_identity": "/run-brand-identity, /brand-identity/revise, /generate-brand-palettes",
             "brand_discovery": "/brand-discovery/init, /brand-discovery/respond, /brand-discovery/suggestions, /brand-discovery/complete",
             "logo_generation": "/logo/generate-palettes, /logo/generate, /logo/generate-3d, /logo/suggestions",
+            "logo_vectorization": "/vectorize-logo",
+            "vectorization": "/vectorization/vectorize, /vectorization/vectorize/upload/autotrace, /vectorization/vectorize/upload/potrace, /vectorization/health",
             "ideation": {
                 "POST /init": "Initialize a new session",
                 "POST /respond": "Submit response to any question by index and get next question",
@@ -1917,6 +1928,705 @@ def health_check():
     logger.info("=== END HEALTH CHECK ===\n")
     
     return response_data
+
+# =============================================================================
+# STOCK IMAGES API ENDPOINTS
+# =============================================================================
+
+class StockImageRequest(BaseModel):
+    query: str
+    perPage: int = 8
+    page: int = 1
+    orientation: str = "landscape"
+
+@app.post("/stock-images")
+async def get_stock_images(request: StockImageRequest):
+    """Get stock images from Pexels API"""
+    logger.info(f"=== STOCK IMAGES REQUEST: {request.query} ===")
+    
+    try:
+        headers = {
+            'Authorization': 't2kXItoCsRYzjXRMm2muPOVE0fanryzMiD13aywXH7o6RPAmphADpkeh'
+        }
+        
+        params = {
+            'query': request.query,
+            'per_page': request.perPage,
+            'page': request.page,
+            'orientation': request.orientation
+        }
+        
+        logger.info(f"Calling Pexels API with query: '{request.query}'")
+        
+        response = requests.get(
+            'https://api.pexels.com/v1/search',
+            headers=headers,
+            params=params,
+            timeout=30
+        )
+        
+        logger.info(f"Pexels API response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            photo_count = len(result.get("photos", []))
+            logger.info(f"✅ Stock images successful! Found {photo_count} photos")
+            return result
+        else:
+            error_msg = f"Failed to fetch stock images: {response.status_code}"
+            if response.text:
+                error_msg += f" - {response.text[:200]}"
+            logger.error(error_msg)
+            raise HTTPException(status_code=response.status_code, detail=error_msg)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Stock images error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# LOGO VECTORIZATION API ENDPOINTS
+# =============================================================================
+
+class VectorizeLogoRequest(BaseModel):
+    logoUrl: str
+    method: str = "autotrace"  # autotrace or potrace
+    colorCount: Optional[int] = 8  # Number of colors to extract from SVG
+    threshold: Optional[str] = "60%"  # Threshold for potrace
+    generateVariations: bool = True  # Generate meaningful color variations
+    preprocessImage: bool = False  # NEW: Disabled for direct approach
+    aiSeparation: bool = False  # NEW: Disabled for direct approach
+    noBackgroundRemoval: Optional[bool] = True  # NEW: Keep background intact
+    createPngVariations: Optional[bool] = True  # NEW: Create PNG versions
+
+class VectorizeLogoResponse(BaseModel):
+    success: bool
+    vectorizedLogoUrl: Optional[str] = None
+    svgContent: Optional[str] = None
+    vectorizationStatus: str
+    metadata: Optional[Dict[str, Any]] = None
+    logoVariations: Optional[Dict[str, Any]] = None  # Logo variations
+    error: Optional[str] = None
+
+@app.post("/vectorize-logo", response_model=VectorizeLogoResponse)
+async def vectorize_logo(request: VectorizeLogoRequest):
+    """🎯 PURE PYTHON logo vectorization with meaningful color variations"""
+    logger.info(f"=== 🎯 PURE PYTHON VECTORIZE LOGO REQUEST: {request.logoUrl[:100]}... ===")
+    logger.info(f"Pure Python Method: {request.method}, Colors: {request.colorCount}")
+    
+    try:
+        # Use PURE PYTHON vectorization approach
+        logger.info(f"🎯 Starting PURE PYTHON vectorization (no external dependencies)...")
+        
+        vectorized_logo_url = None
+        svg_content = None
+        vectorization_status = "pending"
+        metadata = {}
+        logo_variations = {}
+        
+        try:
+            # Use our pure Python vectorization service
+            from agents.identity.vectorization_service import create_vectorization_service
+            
+            logger.info(f"🎯 Processing logo with PURE PYTHON approach...")
+            
+            # Create vectorization service instance
+            vectorization_service = create_vectorization_service()
+            
+            # ENHANCED APPROACH: Pure Python vectorization with upscaling and pixel-to-vector conversion
+            logger.info("🎯 ENHANCED VECTORIZATION: Upscaling + Pixel-to-Vector + 7 Variations (incl. Grayscale)")
+            result = vectorization_service.vectorize_image_with_ai_separation(
+                image_url=request.logoUrl,
+                method="python_svg",
+                target_size=1200,  # Higher resolution for better vectors
+                upscale_factor=2.0,  # Minimum 2x upscaling
+                color_count=request.colorCount or 12,  # More colors for better analysis
+                generate_variations=request.generateVariations,
+                create_png_variations=getattr(request, 'createPngVariations', True)
+            )
+            
+            logger.info(f"🎯 Enhanced vectorization result: {result.get('success', False)} - Grayscale variation included")
+            
+            if result.get("success"):
+                # Get SVG content
+                svg_content = result.get("svg_content")
+                if svg_content:
+                    # Convert SVG to data URL
+                    vectorized_logo_url = vectorization_service.get_svg_as_data_url(svg_content)
+                    vectorization_status = "success_enhanced_upscaled_vector"
+                    metadata = result.get("metadata", {})
+                    
+                    # Get variations created by SVG processing
+                    if result.get("variations"):
+                        logo_variations = result["variations"]
+                        colors_found = metadata.get("colors_found", 0)
+                        meaningful_variations = metadata.get("meaningful_variations", 0)
+                        
+                        logger.info(f"✅ Enhanced vectorization successful! Upscaled with {result['metadata']['colors_found']} colors + Grayscale variation")
+                        logger.info(f"🎯 Found {colors_found} colors, created {meaningful_variations} meaningful variations")
+                        logger.info(f"📊 No external dependencies, preserves original image integrity")
+                        
+                else:
+                    vectorization_status = "no_svg_content"
+                    logger.warning("Pure Python vectorization successful but no SVG content returned")
+            else:
+                error_msg = result.get("error", "Unknown error")
+                vectorization_status = f"pure_python_failed"
+                logger.warning(f"Pure Python vectorization failed: {error_msg}")
+                
+        except ImportError as e:
+            vectorization_status = "vectorization_service_not_available"
+            logger.warning(f"Pure Python vectorization service not available: {e}")
+        except Exception as e:
+            vectorization_status = f"pure_python_error_{type(e).__name__}"
+            logger.warning(f"Pure Python vectorization error: {str(e)}")
+        
+        logger.info(f"✅ Pure Python vectorization complete - status: {vectorization_status}")
+        
+        return VectorizeLogoResponse(
+            success=bool(vectorized_logo_url),
+            vectorizedLogoUrl=vectorized_logo_url,
+            svgContent=svg_content,
+            vectorizationStatus=vectorization_status,
+            metadata=metadata,
+            logoVariations=logo_variations if logo_variations else None,
+            error=None if vectorized_logo_url else f"Pure Python vectorization failed: {vectorization_status}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Pure Python logo vectorization error: {str(e)}")
+        return VectorizeLogoResponse(
+            success=False,
+            vectorizedLogoUrl=None,
+            svgContent=None,
+            vectorizationStatus="error",
+            metadata=None,
+            logoVariations=None,
+            error=f"Failed to vectorize logo: {str(e)}"
+        )
+
+# =============================================================================
+# LOGO VARIATIONS GENERATION FUNCTIONS
+# =============================================================================
+
+async def generate_logo_variations(svg_content: str, vectorization_service=None):
+    """Generate different logo variations from SVG content"""
+    try:
+        variations = {}
+        
+        # Parse SVG to get dimensions and elements
+        import xml.etree.ElementTree as ET
+        from io import StringIO
+        import re
+        
+        # Clean SVG content and parse
+        svg_root = ET.fromstring(svg_content)
+        
+        # Get original dimensions
+        width = svg_root.get('width', '1024')
+        height = svg_root.get('height', '1024')
+        viewbox = svg_root.get('viewBox', f'0 0 {width} {height}')
+        
+        # Extract numeric values from dimensions
+        width_num = int(re.search(r'\d+', str(width)).group()) if re.search(r'\d+', str(width)) else 1024
+        height_num = int(re.search(r'\d+', str(height)).group()) if re.search(r'\d+', str(height)) else 1024
+        
+        # 1. Primary Logo (Original)
+        variations['primary'] = {
+            'name': 'Primary Logo',
+            'description': 'Main logo version for general use',
+            'svg_content': svg_content,
+            'data_url': vectorization_service.get_svg_as_data_url(svg_content) if vectorization_service else None,
+            'dimensions': {'width': width_num, 'height': height_num},
+            'usage': 'Headers, business cards, primary branding'
+        }
+        
+        # 2. Horizontal Version (if not already horizontal)
+        if height_num > width_num * 0.6:  # If logo is more square/vertical
+            horizontal_svg = create_horizontal_variation(svg_content, svg_root, width_num, height_num)
+            variations['horizontal'] = {
+                'name': 'Horizontal Logo',
+                'description': 'Wide format logo for headers and banners',
+                'svg_content': horizontal_svg,
+                'data_url': vectorization_service.get_svg_as_data_url(horizontal_svg) if vectorization_service else None,
+                'dimensions': {'width': width_num * 1.5, 'height': height_num * 0.7},
+                'usage': 'Website headers, email signatures, letterheads'
+            }
+        
+        # 3. Vertical/Stacked Version
+        vertical_svg = create_vertical_variation(svg_content, svg_root, width_num, height_num)
+        variations['vertical'] = {
+            'name': 'Vertical Logo',
+            'description': 'Stacked logo for narrow spaces',
+            'svg_content': vertical_svg,
+            'data_url': vectorization_service.get_svg_as_data_url(vertical_svg) if vectorization_service else None,
+            'dimensions': {'width': width_num * 0.8, 'height': height_num * 1.3},
+            'usage': 'Social media profiles, mobile apps, narrow layouts'
+        }
+        
+        # 4. Icon/Brandmark Only (extract main graphic element)
+        icon_svg = create_icon_variation(svg_content, svg_root, width_num, height_num)
+        variations['icon'] = {
+            'name': 'Icon/Brandmark',
+            'description': 'Graphic element only, no text',
+            'svg_content': icon_svg,
+            'data_url': vectorization_service.get_svg_as_data_url(icon_svg) if vectorization_service else None,
+            'dimensions': {'width': min(width_num, height_num), 'height': min(width_num, height_num)},
+            'usage': 'Favicons, app icons, social media avatars'
+        }
+        
+        # 5. Wordmark/Logotype (text elements only)
+        wordmark_svg = create_wordmark_variation(svg_content, svg_root, width_num, height_num)
+        if wordmark_svg:
+            variations['wordmark'] = {
+                'name': 'Wordmark/Logotype',
+                'description': 'Text-only version of the logo',
+                'svg_content': wordmark_svg,
+                'data_url': vectorization_service.get_svg_as_data_url(wordmark_svg) if vectorization_service else None,
+                'dimensions': {'width': width_num * 1.2, 'height': height_num * 0.4},
+                'usage': 'Minimal applications, fine print, watermarks'
+            }
+        
+        # 6. One-Color (Black) Version
+        onecolor_svg = create_onecolor_variation(svg_content, svg_root, '#000000')
+        variations['onecolor_black'] = {
+            'name': 'One-Color (Black)',
+            'description': 'Single black color version',
+            'svg_content': onecolor_svg,
+            'data_url': vectorization_service.get_svg_as_data_url(onecolor_svg) if vectorization_service else None,
+            'dimensions': {'width': width_num, 'height': height_num},
+            'usage': 'Photocopying, fax, single-color printing'
+        }
+        
+        # 7. Reversed Out (White) Version
+        reversed_svg = create_onecolor_variation(svg_content, svg_root, '#FFFFFF')
+        variations['reversed_white'] = {
+            'name': 'Reversed Out (White)',
+            'description': 'White version for dark backgrounds',
+            'svg_content': reversed_svg,
+            'data_url': vectorization_service.get_svg_as_data_url(reversed_svg) if vectorization_service else None,
+            'dimensions': {'width': width_num, 'height': height_num},
+            'usage': 'Dark backgrounds, merchandise, packaging'
+        }
+        
+        logger.info(f"Generated {len(variations)} logo variations successfully")
+        return variations
+        
+    except Exception as e:
+        logger.error(f"Error generating logo variations: {str(e)}")
+        return {}
+
+async def generate_png_logo_variations(png_bytes: bytes):
+    """Generate logo variations from PNG with transparent background"""
+    try:
+        variations = {}
+        from PIL import Image, ImageDraw, ImageFont
+        import io
+        
+        # Load the original PNG
+        original_image = Image.open(io.BytesIO(png_bytes)).convert('RGBA')
+        width, height = original_image.size
+        
+        # 1. Primary Logo (Original PNG)
+        buffer = io.BytesIO()
+        original_image.save(buffer, format='PNG')
+        variations['primary'] = {
+            'name': 'Primary Logo',
+            'description': 'Main PNG logo with transparent background',
+            'data_url': f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+            'dimensions': {'width': width, 'height': height},
+            'usage': 'Digital use, websites, presentations'
+        }
+        
+        # 2. Horizontal Version (if logo is tall)
+        if height > width * 0.6:
+            horizontal_img = create_horizontal_png(original_image)
+            buffer = io.BytesIO()
+            horizontal_img.save(buffer, format='PNG')
+            variations['horizontal'] = {
+                'name': 'Horizontal Logo',
+                'description': 'Wide format PNG for headers',
+                'data_url': f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+                'dimensions': {'width': horizontal_img.size[0], 'height': horizontal_img.size[1]},
+                'usage': 'Website headers, banners'
+            }
+        
+        # 3. Icon Version (square crop of main element)
+        icon_img = create_icon_png(original_image)
+        buffer = io.BytesIO()
+        icon_img.save(buffer, format='PNG')
+        variations['icon'] = {
+            'name': 'Icon/Brandmark',
+            'description': 'Square icon version',
+            'data_url': f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+            'dimensions': {'width': icon_img.size[0], 'height': icon_img.size[1]},
+            'usage': 'App icons, social media avatars'
+        }
+        
+        # 4. One-Color Black Version
+        black_img = create_onecolor_png(original_image, (0, 0, 0, 255))
+        buffer = io.BytesIO()
+        black_img.save(buffer, format='PNG')
+        variations['onecolor_black'] = {
+            'name': 'One-Color (Black)',
+            'description': 'Black version for single-color printing',
+            'data_url': f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+            'dimensions': {'width': black_img.size[0], 'height': black_img.size[1]},
+            'usage': 'Photocopying, single-color print'
+        }
+        
+        # 5. White Version
+        white_img = create_onecolor_png(original_image, (255, 255, 255, 255))
+        buffer = io.BytesIO()
+        white_img.save(buffer, format='PNG')
+        variations['reversed_white'] = {
+            'name': 'Reversed Out (White)',
+            'description': 'White version for dark backgrounds',
+            'data_url': f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+            'dimensions': {'width': white_img.size[0], 'height': white_img.size[1]},
+            'usage': 'Dark backgrounds, merchandise'
+        }
+        
+        logger.info(f"Generated {len(variations)} PNG-based logo variations")
+        return variations
+        
+    except Exception as e:
+        logger.error(f"Error generating PNG logo variations: {str(e)}")
+        return {}
+
+def create_horizontal_variation(svg_content: str, svg_root, width: int, height: int):
+    """Create horizontal layout variation"""
+    try:
+        # Simple approach: adjust viewBox to make it wider
+        new_viewbox = f"0 0 {width * 1.5} {height * 0.7}"
+        horizontal_svg = svg_content.replace(
+            svg_root.get('viewBox', f'0 0 {width} {height}'),
+            new_viewbox
+        )
+        return horizontal_svg
+    except:
+        return svg_content
+
+def create_vertical_variation(svg_content: str, svg_root, width: int, height: int):
+    """Create vertical/stacked layout variation"""
+    try:
+        # Simple approach: adjust viewBox to make it taller
+        new_viewbox = f"0 0 {width * 0.8} {height * 1.3}"
+        vertical_svg = svg_content.replace(
+            svg_root.get('viewBox', f'0 0 {width} {height}'),
+            new_viewbox
+        )
+        return vertical_svg
+    except:
+        return svg_content
+
+def create_icon_variation(svg_content: str, svg_root, width: int, height: int):
+    """Create icon-only variation by focusing on graphic elements"""
+    try:
+        # Create a square viewBox focusing on the center
+        size = min(width, height)
+        offset_x = (width - size) // 2
+        offset_y = (height - size) // 2
+        new_viewbox = f"{offset_x} {offset_y} {size} {size}"
+        
+        icon_svg = svg_content.replace(
+            svg_root.get('viewBox', f'0 0 {width} {height}'),
+            new_viewbox
+        )
+        return icon_svg
+    except:
+        return svg_content
+
+def create_wordmark_variation(svg_content: str, svg_root, width: int, height: int):
+    """Create text-only variation"""
+    try:
+        # This is a simplified approach - in a real implementation,
+        # you'd parse SVG elements and extract text elements only
+        import re
+        
+        # Look for text elements in SVG
+        if '<text' in svg_content or 'font' in svg_content.lower():
+            # Create a wider, shorter viewBox for text
+            new_viewbox = f"0 0 {width * 1.2} {height * 0.4}"
+            wordmark_svg = svg_content.replace(
+                svg_root.get('viewBox', f'0 0 {width} {height}'),
+                new_viewbox
+            )
+            return wordmark_svg
+        return None
+    except:
+        return None
+
+def create_onecolor_variation(svg_content: str, svg_root, color: str):
+    """Create single-color variation"""
+    try:
+        import re
+        
+        # Replace all fill colors with the specified color
+        onecolor_svg = re.sub(r'fill="[^"]*"', f'fill="{color}"', svg_content)
+        onecolor_svg = re.sub(r'stroke="[^"]*"', f'stroke="{color}"', onecolor_svg)
+        
+        # Handle style attributes
+        onecolor_svg = re.sub(r'fill:[^;]*;', f'fill:{color};', onecolor_svg)
+        onecolor_svg = re.sub(r'stroke:[^;]*;', f'stroke:{color};', onecolor_svg)
+        
+        return onecolor_svg
+    except:
+        return svg_content
+
+def create_horizontal_png(image):
+    """Create horizontal PNG variation"""
+    try:
+        from PIL import Image
+        
+        # Create a wider canvas
+        new_width = int(image.width * 1.5)
+        new_height = int(image.height * 0.8)
+        
+        horizontal_img = Image.new('RGBA', (new_width, new_height), (255, 255, 255, 0))
+        
+        # Paste original image in center
+        x_offset = (new_width - image.width) // 2
+        y_offset = (new_height - image.height) // 2
+        horizontal_img.paste(image, (x_offset, y_offset), image)
+        
+        return horizontal_img
+    except:
+        return image
+
+def create_icon_png(image):
+    """Create square icon PNG"""
+    try:
+        from PIL import Image
+        
+        # Create square dimensions
+        size = min(image.width, image.height)
+        icon_img = Image.new('RGBA', (size, size), (255, 255, 255, 0))
+        
+        # Crop to center square
+        left = (image.width - size) // 2
+        top = (image.height - size) // 2
+        cropped = image.crop((left, top, left + size, top + size))
+        
+        icon_img.paste(cropped, (0, 0), cropped)
+        return icon_img
+    except:
+        return image
+
+def create_onecolor_png(image, color):
+    """Create single-color PNG variation"""
+    try:
+        from PIL import Image
+        
+        # Convert to grayscale first to get the alpha mask
+        grayscale = image.convert('LA')
+        
+        # Create new image with specified color
+        onecolor_img = Image.new('RGBA', image.size, (255, 255, 255, 0))
+        
+        # Apply color based on original image's alpha
+        pixels = list(image.getdata())
+        new_pixels = []
+        
+        for pixel in pixels:
+            if len(pixel) == 4:  # RGBA
+                if pixel[3] > 0:  # If not transparent
+                    new_pixels.append((color[0], color[1], color[2], pixel[3]))
+                else:
+                    new_pixels.append((255, 255, 255, 0))
+            else:
+                new_pixels.append(color)
+        
+        onecolor_img.putdata(new_pixels)
+        return onecolor_img
+    except:
+        return image
+
+# =============================================================================
+# BRAND GUIDELINES EXPORT ENDPOINTS
+# =============================================================================
+
+class BrandGuidelinesExportRequest(BaseModel):
+    brandData: Dict[str, Any]
+    format: str = "pdf"
+
+class BrandGuidelinesExportResponse(BaseModel):
+    success: bool
+    downloadUrl: Optional[str] = None
+    error: Optional[str] = None
+
+@app.post("/brand-guidelines/export", response_model=BrandGuidelinesExportResponse)
+async def export_brand_guidelines(request: BrandGuidelinesExportRequest):
+    """Export brand guidelines to various formats"""
+    logger.info(f"=== BRAND GUIDELINES EXPORT: {request.format} ===")
+    
+    try:
+        brand_data = request.brandData
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if request.format == "json":
+            filename = f"brand_guidelines_{timestamp}.json"
+            filepath = os.path.join("agents", "output", filename)
+            
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, 'w') as f:
+                json.dump(brand_data, f, indent=2)
+            
+            return BrandGuidelinesExportResponse(
+                success=True,
+                downloadUrl=f"/download/{filename}"
+            )
+            
+        elif request.format == "html":
+            # Generate HTML brand guidelines
+            html_content = generate_html_guidelines(brand_data)
+            filename = f"brand_guidelines_{timestamp}.html"
+            filepath = os.path.join("agents", "output", filename)
+            
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            return BrandGuidelinesExportResponse(
+                success=True,
+                downloadUrl=f"/download/{filename}"
+            )
+            
+        else:  # PDF format
+            # For PDF generation, you would need a library like reportlab or weasyprint
+            # For now, return a text format
+            text_content = generate_text_guidelines(brand_data)
+            filename = f"brand_guidelines_{timestamp}.txt"
+            filepath = os.path.join("agents", "output", filename)
+            
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(text_content)
+            
+            return BrandGuidelinesExportResponse(
+                success=True,
+                downloadUrl=f"/download/{filename}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Brand guidelines export error: {str(e)}")
+        return BrandGuidelinesExportResponse(
+            success=False,
+            error=str(e)
+        )
+
+def generate_html_guidelines(brand_data: Dict[str, Any]) -> str:
+    """Generate HTML brand guidelines"""
+    colors_html = ""
+    if brand_data.get("colors"):
+        colors_html = "<div class='colors'>"
+        for color in brand_data["colors"]:
+            colors_html += f'<div class="color-swatch" style="background-color: {color}"><span>{color}</span></div>'
+        colors_html += "</div>"
+    
+    personality_html = ""
+    if brand_data.get("personality"):
+        personality_html = "<ul>"
+        for trait in brand_data["personality"]:
+            personality_html += f"<li>{trait}</li>"
+        personality_html += "</ul>"
+    
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>{brand_data.get('name', 'Brand')} Guidelines</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+            h1 {{ color: #333; border-bottom: 2px solid #ddd; padding-bottom: 10px; }}
+            h2 {{ color: #666; margin-top: 30px; }}
+            .colors {{ display: flex; gap: 20px; margin: 20px 0; }}
+            .color-swatch {{ 
+                width: 100px; height: 100px; border-radius: 8px; 
+                display: flex; align-items: center; justify-content: center;
+                color: white; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+            }}
+            .logo {{ text-align: center; margin: 20px 0; }}
+            .logo img {{ max-width: 300px; max-height: 200px; }}
+        </style>
+    </head>
+    <body>
+        <h1>{brand_data.get('name', 'Brand')} Brand Guidelines</h1>
+        
+        <h2>Brand Logo</h2>
+        <div class="logo">
+            {f'<img src="{brand_data["logoUrl"]}" alt="Brand Logo" />' if brand_data.get("logoUrl") else '<p>Logo not available</p>'}
+        </div>
+        
+        <h2>Color Palette</h2>
+        {colors_html}
+        
+        <h2>Brand Personality</h2>
+        {personality_html}
+        
+        <h2>Brand Description</h2>
+        <p>{brand_data.get('customDescription', 'No description provided')}</p>
+        
+        <h2>Usage Guidelines</h2>
+        <ul>
+            <li>Maintain proper logo clear space</li>
+            <li>Use brand colors consistently</li>
+            <li>Follow typography guidelines</li>
+            <li>Ensure brand voice consistency</li>
+        </ul>
+        
+        <p><em>Generated on {datetime.now().strftime("%B %d, %Y")}</em></p>
+    </body>
+    </html>
+    """
+    
+    return html_template
+
+def generate_text_guidelines(brand_data: Dict[str, Any]) -> str:
+    """Generate text brand guidelines"""
+    text = f"""
+{brand_data.get('name', 'Brand')} Brand Guidelines
+{'='*50}
+
+Brand Colors:
+{chr(10).join([f'- {color}' for color in brand_data.get('colors', [])])}
+
+Brand Personality:
+{chr(10).join([f'- {trait}' for trait in brand_data.get('personality', [])])}
+
+Brand Description:
+{brand_data.get('customDescription', 'No description provided')}
+
+Logo Usage Guidelines:
+- Maintain minimum clear space around logo
+- Use on appropriate backgrounds for visibility
+- Never distort or stretch the logo
+- Use vector formats when possible
+
+Typography Guidelines:
+- Use consistent font families
+- Maintain proper hierarchy
+- Ensure readability across all media
+
+Generated on: {datetime.now().strftime("%B %d, %Y at %I:%M %p")}
+    """
+    
+    return text.strip()
+
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    """Download generated files"""
+    filepath = os.path.join("agents", "output", filename)
+    
+    if os.path.exists(filepath):
+        return FileResponse(
+            path=filepath,
+            filename=filename,
+            media_type='application/octet-stream'
+        )
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
 
 # =============================================================================
 # MAIN ENTRY POINT

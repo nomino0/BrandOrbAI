@@ -21,8 +21,11 @@ logger = logging.getLogger(__name__)
 class LogoGeneratorAgent:
     def __init__(self):
         self.model = "qwen/qwen-2.5-coder-32b-instruct"
-        # Use environment variable for API key, fallback to hardcoded for now
-        api_key = os.getenv("OPENROUTER_API_KEY", "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")
+        # Use environment variable for API key
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY environment variable is required")
+        
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key
