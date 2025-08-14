@@ -4293,91 +4293,28 @@ async def schedule_posts(request: SchedulePostRequest):
         # Generate optimal scheduling times using marketing strategy
         scheduled_posts = []
         for i, post in enumerate(request.posts):
-            if request.schedule_type == 'optimal':
-                # Get optimal times from marketing strategy
-                optimal_times_data = marketing_strategy.get('engagement_heatmap', {}).get('best_times', {})
-                platform_times = optimal_times_data.get(request.platform, {})
-                
-                # Extract hours from marketing strategy or use defaults
-                if platform_times:
-                    # Convert marketing strategy times to hours (keys are already hours as strings)
-                    optimal_hours = []
-                    for hour_str, engagement_score in platform_times.items():
-                        if engagement_score > 0.7:  # Only use high-engagement times
-                            optimal_hours.append(int(hour_str))
-                    
-                    # Sort by engagement score (descending) and use top times
-                    sorted_times = sorted(platform_times.items(), key=lambda x: x[1], reverse=True)
-                    optimal_hours = [int(hour) for hour, score in sorted_times[:3] if score > 0.6]
-                else:
-                    # Fallback to default optimal times
-                    default_optimal_times = {
-                        'linkedin': [9, 13, 17],  # 9 AM, 1 PM, 5 PM
-                        'facebook': [10, 15, 19], # 10 AM, 3 PM, 7 PM  
-                        'instagram': [11, 14, 20], # 11 AM, 2 PM, 8 PM
-                        'tiktok': [12, 16, 21],   # 12 PM, 4 PM, 9 PM
-                        'x': [8, 12, 18]          # 8 AM, 12 PM, 6 PM
-                    }
-                    optimal_hours = default_optimal_times.get(request.platform, [9, 13, 17])
-                
-                # Ensure we have at least some optimal hours
-                if not optimal_hours:
-                    optimal_hours = [9, 13, 17]  # Safe fallback
-                
-                # Select hour for this post
-                hour = optimal_hours[i % len(optimal_hours)]
-                
-                # Get optimal days from marketing strategy
-                optimal_days_data = marketing_strategy.get('engagement_heatmap', {}).get('best_days', {})
-                platform_days = optimal_days_data.get(request.platform, {})
-                
-                # Calculate base date considering optimal days
-                base_date = datetime.now().replace(hour=hour, minute=0, second=0, microsecond=0)
-                days_offset = i // len(optimal_hours)
-                
-                # If we have optimal days data, try to schedule on better days
-                if platform_days:
-                    target_date = base_date + timedelta(days=days_offset)
-                    current_day = target_date.strftime('%A').lower()
-                    
-                    # If current day has low engagement, move to better day
-                    if platform_days.get(current_day, 0.5) < 0.7:
-                        # Find the next high-engagement day
-                        for day_offset in range(1, 8):  # Check next 7 days
-                            test_date = target_date + timedelta(days=day_offset)
-                            test_day = test_date.strftime('%A').lower()
-                            if platform_days.get(test_day, 0.5) > 0.7:
-                                target_date = test_date
-                                break
-                    
-                    schedule_time = target_date
-                else:
-                    schedule_time = base_date + timedelta(days=days_offset)
-                
-                # Ensure the time is in the future
-                if schedule_time <= datetime.now():
-                    schedule_time += timedelta(days=1)
-                
-                # Get engagement prediction and optimal reason from strategy
-                engagement_level = "high" if platform_times.get(str(hour), 0.5) > 0.8 else "medium"
-                if platform_days:
-                    day_name = schedule_time.strftime('%A')
-                    day_engagement = platform_days.get(day_name.lower(), 0.5)
-                    if day_engagement > 0.8:
-                        engagement_level = "high"
-                
-                optimal_reason = f"Optimized for {request.platform} using marketing strategy analysis"
-                if platform_times:
-                    engagement_score = platform_times.get(str(hour), 0.5)
-                    optimal_reason += f" (engagement score: {engagement_score:.1f})"
-                    
+            # **REMOVE THE PROBLEMATIC SCHEDULING LOGIC**
+            # Use the optimal time that's already calculated in the post generation
+            if post.get('scheduled_time'):
+                # If post already has a scheduled time, use it
+                try:
+                    schedule_time = datetime.fromisoformat(post['scheduled_time'].replace('Z', ''))
+                except:
+                    # Fallback if parsing fails
+                    schedule_time = start_date + timedelta(hours=i * 2)
             else:
                 # Manual scheduling with specified intervals
                 schedule_time = start_date + timedelta(hours=i * 2)
-                engagement_level = "medium"
-                optimal_reason = "Manual scheduling"
             
-            # Create the scheduled post object
+            # Ensure the time is in the future
+            if schedule_time <= datetime.now():
+                schedule_time += timedelta(days=1)
+            
+            # Use the engagement prediction from the original post
+            engagement_level = post.get('engagement_prediction', 'medium')
+            optimal_reason = post.get('optimal_reason', f'Optimized for {request.platform}')
+            
+            # Create the scheduled post object - preserve original optimal times
             scheduled_post = {
                 'id': post.get('id', f"post_{request.platform}_{i+1}_{int(datetime.now().timestamp())}"),
                 'platform': request.platform,
@@ -4388,7 +4325,7 @@ async def schedule_posts(request: SchedulePostRequest):
                 'scheduled_time': schedule_time.isoformat(),
                 'optimal_time': post.get('optimal_time', f"{schedule_time.hour}:00 {'AM' if schedule_time.hour < 12 else 'PM'}"),
                 'status': 'scheduled',
-                'engagement_prediction': post.get('engagement_prediction', engagement_level),
+                'engagement_prediction': engagement_level,
                 'call_to_action': post.get('call_to_action', ''),
                 'has_media': post.get('has_media', False),
                 'content_type': post.get('content_type', 'text'),
@@ -4410,7 +4347,7 @@ async def schedule_posts(request: SchedulePostRequest):
             "success": True,
             "scheduled_posts": scheduled_posts,
             "platform": request.platform,
-            "message": f"Successfully scheduled {len(scheduled_posts)} posts for {request.platform} using marketing strategy optimization",
+            "message": f"Successfully scheduled {len(scheduled_posts)} posts for {request.platform}",
             "storage_saved": success,
             "marketing_strategy_applied": bool(marketing_strategy.get('engagement_heatmap'))
         }
@@ -4572,6 +4509,160 @@ async def load_business_data():
     except Exception as e:
         logger.error(f"Error loading business data: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to load business data: {str(e)}")
+
+@app.get("/social-media/post/{post_id}")
+async def get_scheduled_post(post_id: str):
+    """Get details of a specific scheduled post"""
+    try:
+        data = load_scheduled_posts()
+        posts = data.get("scheduled_posts", [])
+        
+        post = next((p for p in posts if p.get("id") == post_id), None)
+        if not post:
+            raise HTTPException(status_code=404, detail="Post not found")
+        
+        return {
+            "success": True,
+            "post": post
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting post {post_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get post: {str(e)}")
+
+@app.put("/social-media/post/{post_id}/reschedule")
+async def reschedule_post(post_id: str, request: dict):
+    """Reschedule a specific post"""
+    try:
+        new_time = request.get("new_time")
+        if not new_time:
+            raise HTTPException(status_code=400, detail="new_time is required")
+            
+        data = load_scheduled_posts()
+        posts = data.get("scheduled_posts", [])
+        
+        post_index = next((i for i, p in enumerate(posts) if p.get("id") == post_id), None)
+        if post_index is None:
+            raise HTTPException(status_code=404, detail="Post not found")
+        
+        # Parse the new time
+        try:
+            new_schedule_time = datetime.fromisoformat(new_time)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid datetime format. Use ISO format.")
+        
+        # Update the post
+        posts[post_index]["scheduled_time"] = new_schedule_time.isoformat()
+        posts[post_index]["suggested_date"] = new_schedule_time.strftime('%B %d, %Y')
+        posts[post_index]["suggested_time"] = new_schedule_time.strftime('%I:%M %p')
+        posts[post_index]["optimal_reason"] = "Manually rescheduled by user"
+        
+        # Save back to storage
+        success = save_scheduled_posts(posts)
+        if not success:
+            raise Exception("Failed to save rescheduled post")
+        
+        return {
+            "success": True,
+            "message": "Post rescheduled successfully",
+            "post": posts[post_index]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rescheduling post {post_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reschedule post: {str(e)}")
+
+@app.put("/social-media/post/{post_id}/regenerate-media")
+async def regenerate_post_media(post_id: str):
+    """Regenerate media for a specific post while keeping the text content"""
+    try:
+        data = load_scheduled_posts()
+        posts = data.get("scheduled_posts", [])
+        
+        post_index = next((i for i, p in enumerate(posts) if p.get("id") == post_id), None)
+        if post_index is None:
+            raise HTTPException(status_code=404, detail="Post not found")
+        
+        post = posts[post_index]
+        
+        # Generate new image using the existing content
+        business_summary = f"Post content: {post.get('content', '')}"
+        image_data = social_media_agent.generate_post_image(post, business_summary)
+        
+        if image_data:
+            posts[post_index]["image_url"] = image_data
+            posts[post_index]["has_media"] = True
+            posts[post_index]["content_type"] = "image"
+        
+        # Save back to storage
+        success = save_scheduled_posts(posts)
+        if not success:
+            raise Exception("Failed to save post with new media")
+        
+        return {
+            "success": True,
+            "message": "Media regenerated successfully",
+            "post": posts[post_index],
+            "new_image_url": image_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error regenerating media for post {post_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate media: {str(e)}")
+
+@app.put("/social-media/post/{post_id}/regenerate-content")
+async def regenerate_post_content(post_id: str):
+    """Regenerate content for a specific post while keeping the media"""
+    try:
+        data = load_scheduled_posts()
+        posts = data.get("scheduled_posts", [])
+        
+        post_index = next((i for i, p in enumerate(posts) if p.get("id") == post_id), None)
+        if post_index is None:
+            raise HTTPException(status_code=404, detail="Post not found")
+        
+        post = posts[post_index]
+        platform = post.get("platform", "linkedin")
+        
+        # Load marketing strategy for content generation
+        marketing_strategy = load_marketing_strategy_data()
+        
+        # Generate new content using the social media agent
+        new_posts = social_media_agent.generate_marketing_posts(
+            business_summary="Generate new content for existing post",
+            marketing_insights=marketing_strategy,
+            platform=platform,
+            count=1
+        )
+        
+        if new_posts and len(new_posts) > 0:
+            new_post = new_posts[0]
+            # Keep the existing media but update content
+            posts[post_index].update({
+                "title": new_post.get("title", post.get("title")),
+                "content": new_post.get("content", post.get("content")),
+                "hashtags": new_post.get("hashtags", post.get("hashtags", [])),
+                "call_to_action": new_post.get("call_to_action", post.get("call_to_action"))
+            })
+            
+            # Save back to storage
+            success = save_scheduled_posts(posts)
+            if not success:
+                raise Exception("Failed to save post with new content")
+        
+        return {
+            "success": True,
+            "message": "Content regenerated successfully",
+            "post": posts[post_index]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error regenerating content for post {post_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate content: {str(e)}")
 
 # =============================================================================
 # LINKEDIN SPECIFIC ENDPOINTS

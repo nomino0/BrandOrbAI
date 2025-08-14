@@ -14,6 +14,17 @@ import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
 import { Calendar } from "@/components/ui/calendar"
 import { Sidebar, SidebarHeader, SidebarContent } from "@/components/ui/sidebar"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { 
   Settings, 
   Sparkles, 
@@ -27,7 +38,6 @@ import {
   Save,
   HelpCircle,
   TrendingUp,
- 
   Send,
   Video,
   Calendar as CalendarIcon,
@@ -40,7 +50,9 @@ import {
   Upload,
   Image,
   Type,
-  Plus
+  Plus,
+  RefreshCw,
+  Trash
 } from 'lucide-react'
 import { 
   Linkedin,
@@ -152,6 +164,11 @@ export default function OnlinePresencePage() {
     monday.setHours(0, 0, 0, 0)
     return monday
   })
+
+  // Post management modal state
+  const [selectedPost, setSelectedPost] = useState<any>(null)
+  const [showPostModal, setShowPostModal] = useState(false)
+  const [postModalLoading, setPostModalLoading] = useState(false)
 
   // Get week dates
   const getWeekDates = (weekStart: Date): Date[] => {
@@ -1135,6 +1152,134 @@ export default function OnlinePresencePage() {
     </Card>
   )
 
+  // Post management functions
+  const handlePostClick = async (post: any) => {
+    try {
+      // Try to fetch the complete post details from backend
+      const response = await fetch(`http://localhost:8000/get_scheduled_post/${post.id}`)
+      if (response.ok) {
+        const fullPost = await response.json()
+        setSelectedPost(fullPost.post || post)
+      } else {
+        // Fallback to the post we already have
+        setSelectedPost(post)
+      }
+    } catch (error) {
+      console.error('Error fetching full post details:', error)
+      // Fallback to the post we already have
+      setSelectedPost(post)
+    }
+    setShowPostModal(true)
+  }
+
+  const handleReschedulePost = async (newDateTime: string) => {
+    if (!selectedPost) return
+    
+    setPostModalLoading(true)
+    try {
+      const response = await fetch('http://localhost:8000/reschedule_post', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          post_id: selectedPost.id,
+          new_scheduled_time: newDateTime
+        })
+      })
+      
+      if (response.ok) {
+        toast.success('Post rescheduled successfully!')
+        loadUpcomingPosts()
+        setShowPostModal(false)
+      } else {
+        toast.error('Failed to reschedule post')
+      }
+    } catch (error) {
+      console.error('Error rescheduling post:', error)
+      toast.error('Failed to reschedule post')
+    } finally {
+      setPostModalLoading(false)
+    }
+  }
+
+  const handleRegenerateMedia = async () => {
+    if (!selectedPost) return
+    
+    setPostModalLoading(true)
+    try {
+      const response = await fetch('http://localhost:8000/regenerate_post_media', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          post_id: selectedPost.id
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        setSelectedPost(result.post)
+        toast.success('Media regenerated successfully!')
+        loadUpcomingPosts()
+      } else {
+        toast.error('Failed to regenerate media')
+      }
+    } catch (error) {
+      console.error('Error regenerating media:', error)
+      toast.error('Failed to regenerate media')
+    } finally {
+      setPostModalLoading(false)
+    }
+  }
+
+  const handleRegenerateContent = async () => {
+    if (!selectedPost) return
+    
+    setPostModalLoading(true)
+    try {
+      const response = await fetch('http://localhost:8000/regenerate_post_content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          post_id: selectedPost.id
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        setSelectedPost(result.post)
+        toast.success('Content regenerated successfully!')
+        loadUpcomingPosts()
+      } else {
+        toast.error('Failed to regenerate content')
+      }
+    } catch (error) {
+      console.error('Error regenerating content:', error)
+      toast.error('Failed to regenerate content')
+    } finally {
+      setPostModalLoading(false)
+    }
+  }
+
+  const handleCancelPost = async () => {
+    if (!selectedPost) return
+    
+    setPostModalLoading(true)
+    try {
+      await cancelScheduledPostHandler(selectedPost.id)
+      setShowPostModal(false)
+      loadUpcomingPosts()
+    } catch (error) {
+      console.error('Error canceling post:', error)
+    } finally {
+      setPostModalLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-surface">
@@ -1461,7 +1606,10 @@ export default function OnlinePresencePage() {
                                   marginTop: index > 0 ? '2px' : '0'
                                 }}
                               >
-                                <div className="flex items-center gap-1 p-1 rounded text-xs bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 transition-colors cursor-pointer">
+                                <div 
+                                  className="flex items-center gap-1 p-1 rounded text-xs bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 transition-colors cursor-pointer"
+                                  onClick={() => handlePostClick(post)}
+                                >
                                   {/* Platform Icon */}
                                   <div className="flex-shrink-0">
                                     {post.platform === 'linkedin' && <Linkedin className="h-3 w-3 text-blue-600" />}
@@ -1487,6 +1635,7 @@ export default function OnlinePresencePage() {
                                 <div className="absolute left-0 top-full mt-1 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 w-48 pointer-events-none">
                                   <div className="font-medium">{post.title}</div>
                                   <div className="text-gray-300 mt-1">{post.content?.slice(0, 100)}...</div>
+                                  <div className="text-gray-400 text-xs mt-1">Click to manage</div>
                                 </div>
                               </div>
                             ))}
@@ -1500,7 +1649,10 @@ export default function OnlinePresencePage() {
                                   marginTop: (morningPosts.length > 0 || index > 0) ? '2px' : '0'
                                 }}
                               >
-                                <div className="flex items-center gap-1 p-1 rounded text-xs bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors cursor-pointer">
+                                <div 
+                                  className="flex items-center gap-1 p-1 rounded text-xs bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors cursor-pointer"
+                                  onClick={() => handlePostClick(post)}
+                                >
                                   {/* Platform Icon */}
                                   <div className="flex-shrink-0">
                                     {post.platform === 'linkedin' && <Linkedin className="h-3 w-3 text-blue-600" />}
@@ -1526,6 +1678,7 @@ export default function OnlinePresencePage() {
                                 <div className="absolute left-0 top-full mt-1 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 w-48 pointer-events-none">
                                   <div className="font-medium">{post.title}</div>
                                   <div className="text-gray-300 mt-1">{post.content?.slice(0, 100)}...</div>
+                                  <div className="text-gray-400 text-xs mt-1">Click to manage</div>
                                 </div>
                               </div>
                             ))}
@@ -1539,7 +1692,10 @@ export default function OnlinePresencePage() {
                                   marginTop: (morningPosts.length > 0 || afternoonPosts.length > 0 || index > 0) ? '2px' : '0'
                                 }}
                               >
-                                <div className="flex items-center gap-1 p-1 rounded text-xs bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer">
+                                <div 
+                                  className="flex items-center gap-1 p-1 rounded text-xs bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer"
+                                  onClick={() => handlePostClick(post)}
+                                >
                                   {/* Platform Icon */}
                                   <div className="flex-shrink-0">
                                     {post.platform === 'linkedin' && <Linkedin className="h-3 w-3 text-blue-600" />}
@@ -1565,6 +1721,7 @@ export default function OnlinePresencePage() {
                                 <div className="absolute left-0 top-full mt-1 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 w-48 pointer-events-none">
                                   <div className="font-medium">{post.title}</div>
                                   <div className="text-gray-300 mt-1">{post.content?.slice(0, 100)}...</div>
+                                  <div className="text-gray-400 text-xs mt-1">Click to manage</div>
                                 </div>
                               </div>
                             ))}
@@ -1611,6 +1768,194 @@ export default function OnlinePresencePage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Post Management Modal */}
+            {showPostModal && selectedPost && (
+              <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white/98 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200/50">
+                  <div className="p-6">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-3 rounded-xl ${platformColors[selectedPost.platform]} text-white shadow-md`}>
+                          {selectedPost.platform === 'linkedin' && <Linkedin className="h-5 w-5" />}
+                          {selectedPost.platform === 'facebook' && <Facebook className="h-5 w-5" />}
+                          {selectedPost.platform === 'instagram' && <Instagram className="h-5 w-5" />}
+                          {selectedPost.platform === 'tiktok' && <Video className="h-5 w-5" />}
+                          {selectedPost.platform === 'x' && <Twitter className="h-5 w-5" />}
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-semibold text-gray-900">{selectedPost.title}</h3>
+                          <p className="text-sm text-gray-500 capitalize">
+                            {selectedPost.platform} • {selectedPost.scheduled_time && new Date(selectedPost.scheduled_time).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setShowPostModal(false)}
+                        className="h-10 w-10 p-0 rounded-full border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Content Preview */}
+                    <div className="space-y-6 mb-6">
+                      <div>
+                        <h4 className="font-semibold mb-3 text-gray-900">Content Preview</h4>
+                        <div className="p-4 bg-gradient-to-br from-slate-50 to-gray-50/80 rounded-xl border border-gray-200">
+                          <p className="text-sm whitespace-pre-wrap text-gray-700 leading-relaxed">{selectedPost.content}</p>
+                          {selectedPost.hashtags && selectedPost.hashtags.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-4">
+                              {selectedPost.hashtags.map((tag: string, index: number) => (
+                                <span key={index} className="px-3 py-1 bg-blue-50 text-blue-600 text-xs rounded-full border border-blue-100 font-medium">
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {(selectedPost.image_path || selectedPost.image_url) && (
+                        <div>
+                          <h4 className="font-semibold mb-3 text-gray-900">Media Content</h4>
+                          <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 p-2">
+                            <img 
+                              src={selectedPost.image_path || selectedPost.image_url} 
+                              alt="Post media" 
+                              className="w-full max-w-md mx-auto rounded-lg shadow-sm"
+                              onError={(e) => {
+                                console.log('Image failed to load:', selectedPost.image_path || selectedPost.image_url)
+                                e.currentTarget.style.display = 'none'
+                                // Show fallback
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement
+                                if (fallback) fallback.style.display = 'block'
+                              }}
+                              onLoad={() => console.log('Image loaded successfully')}
+                            />
+                            <div style={{ display: 'none' }} className="text-center py-8 text-gray-500">
+                              <Image className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                              <p className="text-sm font-medium">Failed to load media</p>
+                              <p className="text-xs text-gray-400 mt-1 font-mono break-all">
+                                {selectedPost.image_path || selectedPost.image_url}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show media indicator even if no image URL */}
+                      {(selectedPost.has_media && !selectedPost.image_path && !selectedPost.image_url) && (
+                        <div>
+                          <h4 className="font-semibold mb-3 text-gray-900">Media Content</h4>
+                          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-8 text-center">
+                            <Image className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                            <p className="text-sm font-medium text-gray-600">Media attached but not loaded</p>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Content type: <span className="font-mono">{selectedPost.content_type || 'Unknown'}</span>
+                            </p>
+                            {/* Debug info */}
+                            <details className="mt-4 text-xs text-left">
+                              <summary className="cursor-pointer text-gray-400 hover:text-gray-600">Debug Info</summary>
+                              <pre className="mt-2 p-2 bg-gray-100 rounded text-xs font-mono text-gray-600 whitespace-pre-wrap">
+                                {JSON.stringify({
+                                  id: selectedPost.id,
+                                  has_media: selectedPost.has_media,
+                                  content_type: selectedPost.content_type,
+                                  image_path: selectedPost.image_path,
+                                  image_url: selectedPost.image_url
+                                }, null, 2)}
+                              </pre>
+                            </details>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-6 pt-4 border-t border-gray-100">
+                      <div className="grid grid-cols-2 gap-4">
+                        <Button
+                          variant="outline"
+                          onClick={handleRegenerateContent}
+                          disabled={postModalLoading}
+                          className="flex items-center gap-2 h-12 bg-white hover:bg-blue-50 hover:border-blue-300 border-gray-200 hover:text-blue-700 transition-all"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${postModalLoading ? 'animate-spin' : ''}`} />
+                          Regenerate Content
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleRegenerateMedia}
+                          disabled={postModalLoading}
+                          className="flex items-center gap-2 h-12 bg-white hover:bg-purple-50 hover:border-purple-300 border-gray-200 hover:text-purple-700 transition-all"
+                        >
+                          <Image className="h-4 w-4" />
+                          Regenerate Media
+                        </Button>
+                      </div>
+
+                      {/* Reschedule Section */}
+                      <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/80 rounded-xl p-4 border border-blue-200">
+                        <h4 className="font-semibold mb-3 text-blue-900 flex items-center gap-2">
+                          <CalendarIcon className="h-4 w-4" />
+                          Reschedule Post
+                        </h4>
+                        <div className="flex gap-3">
+                          <input
+                            type="datetime-local"
+                            className="flex-1 px-4 py-2 border border-blue-200 rounded-lg text-sm bg-white/90 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                            defaultValue={selectedPost.scheduled_time ? new Date(selectedPost.scheduled_time).toISOString().slice(0, 16) : ''}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleReschedulePost(e.target.value)
+                              }
+                            }}
+                            disabled={postModalLoading}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Delete Post Alert Dialog */}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            disabled={postModalLoading}
+                            className="w-full h-12 text-red-600 hover:bg-red-50 hover:border-red-200 border-gray-300 bg-white transition-all"
+                          >
+                            <Trash className="h-4 w-4 mr-2" />
+                            Cancel & Delete Post
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the scheduled post
+                              and remove it from your content calendar.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleCancelPost}
+                              disabled={postModalLoading}
+                              className="bg-red-600 hover:bg-red-700 text-white"
+                            >
+                              {postModalLoading ? 'Deleting...' : 'Delete Post'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Custom Post Creator */}
             {showCustomPostCreator && (
