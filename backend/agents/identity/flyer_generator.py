@@ -4,6 +4,7 @@ Professional Flyer Generator - AI-Powered Flyer Creation for Logo Generator Prom
 Uses QWEN for content generation and Pollinations for image creation
 """
 
+import os
 import streamlit as st
 import json
 import re
@@ -14,13 +15,16 @@ import base64
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class FlyerGeneratorAgent:
     def __init__(self):
         self.model = "qwen/qwen-2.5-coder-32b-instruct"
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key="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"
+            api_key=os.getenv('OPENROUTER_API_KEY')
         )
         
     def generate_flyer_concepts(self, business_summary, target_audience="business owners"):

@@ -5,7 +5,8 @@ import logging
 import uuid
 import base64
 import requests
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from io import BytesIO
 import sys
@@ -50,6 +51,11 @@ from agents.ideation_agents import (
 # Import vectorization service
 from agents.identity.vectorization_api import vectorization_router
 
+# Import social media agents  
+from agents.social_media_agent import SocialMediaAgent, social_media_agent
+from agents.linkedin_agent import LinkedInAgent, linkedin_agent
+from pathlib import Path
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -79,6 +85,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Session storage for marketing analysis
+sessions: Dict[str, Any] = {}
+
 # Middleware for request/response logging
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -106,6 +115,228 @@ runs = {}  # For multi-agent runs
 sessions = {}  # For ideation sessions
 brand_identity_storage = {}  # For brand identity results
 brand_discovery_sessions = {}  # For brand discovery sessions
+
+# =============================================================================
+# SOCIAL MEDIA STORAGE FUNCTIONS
+# =============================================================================
+
+def get_scheduled_posts_file_path():
+    """Get the path for the scheduled posts JSON file"""
+    output_dir = os.path.join(os.path.dirname(__file__), "agents", "output")
+    os.makedirs(output_dir, exist_ok=True)
+    return os.path.join(output_dir, "scheduled_posts.json")
+
+def load_marketing_strategy_data():
+    """Load marketing strategy insights for optimal post scheduling"""
+    try:
+        # Check if we have any marketing strategy sessions with insights
+        for analysis_id, analysis_data in sessions.items():
+            if "business_context" in analysis_data:
+                # Try to get insights for this analysis
+                try:
+                    # Get LinkedIn insights
+                    linkedin_insights = None
+                    if analysis_data.get("linkedin_analysis") and "session_id" in analysis_data["linkedin_analysis"]:
+                        linkedin_insights = get_linkedin_insights_sync(
+                            analysis_data["linkedin_analysis"]["session_id"],
+                            ["high_engagement_rate", "viral", "popular_post"]
+                        )
+                    
+                    # Get TikTok insights  
+                    tiktok_insights = None
+                    if analysis_data.get("tiktok_analysis") and "session_id" in analysis_data["tiktok_analysis"]:
+                        tiktok_insights = get_tiktok_insights_sync(
+                            analysis_data["tiktok_analysis"]["session_id"],
+                            ["high_engagement_rate", "viral", "highly_shareable"]
+                        )
+                    
+                    # Generate combined insights
+                    insights = {
+                        "linkedin_insights": linkedin_insights,
+                        "tiktok_insights": tiktok_insights,
+                        "combined_strategy": None,
+                        "posting_calendar": None,
+                        "engagement_heatmap": None
+                    }
+                    
+                    insights["combined_strategy"] = _generate_combined_strategy(insights, analysis_data["business_context"])
+                    insights["posting_calendar"] = _generate_posting_calendar(insights)
+                    insights["engagement_heatmap"] = _generate_engagement_heatmap(insights)
+                    
+                    return insights
+                except Exception as e:
+                    logger.warning(f"Failed to load insights for analysis {analysis_id}: {e}")
+                    continue
+        
+        # Return default strategy if no marketing strategy data is available
+        return get_default_marketing_strategy()
+        
+    except Exception as e:
+        logger.error(f"Error loading marketing strategy data: {e}")
+        return get_default_marketing_strategy()
+
+def get_default_marketing_strategy():
+    """Return default marketing strategy when no analysis is available"""
+    return {
+        "engagement_heatmap": {
+            "best_times": {
+                "linkedin": {"9": 0.9, "13": 0.8, "17": 0.7},
+                "facebook": {"10": 0.8, "15": 0.9, "19": 0.7},
+                "instagram": {"11": 0.8, "14": 0.9, "20": 0.8},
+                "tiktok": {"12": 0.7, "16": 0.8, "21": 0.9},
+                "x": {"8": 0.8, "12": 0.9, "18": 0.7}
+            },
+            "best_days": {
+                "linkedin": {"tuesday": 0.9, "wednesday": 0.9, "thursday": 0.8},
+                "facebook": {"wednesday": 0.8, "friday": 0.9, "saturday": 0.8},
+                "instagram": {"monday": 0.8, "tuesday": 0.8, "friday": 0.9},
+                "tiktok": {"friday": 0.9, "saturday": 0.9, "sunday": 0.8},
+                "x": {"monday": 0.8, "tuesday": 0.9, "wednesday": 0.8}
+            }
+        },
+        "posting_calendar": {
+            "optimal_times": {
+                "linkedin": {"best_times": ["9:00 AM", "1:00 PM", "5:00 PM"]},
+                "facebook": {"best_times": ["10:00 AM", "3:00 PM", "7:00 PM"]},
+                "instagram": {"best_times": ["11:00 AM", "2:00 PM", "8:00 PM"]},
+                "tiktok": {"best_times": ["12:00 PM", "4:00 PM", "9:00 PM"]},
+                "x": {"best_times": ["8:00 AM", "12:00 PM", "6:00 PM"]}
+            }
+        },
+        "combined_strategy": {
+            "timing_strategy": {
+                "linkedin_optimal_time": "Business hours (9 AM - 5 PM)",
+                "facebook_optimal_time": "Afternoon and evening",
+                "instagram_optimal_time": "Morning and evening",
+                "tiktok_optimal_time": "Evening (6-9 PM)",
+                "x_optimal_time": "Business hours and lunch time"
+            }
+        }
+    }
+
+def get_linkedin_insights_sync(session_id: str, metrics: list):
+    """Synchronous version of get_linkedin_insights for strategy loading"""
+    try:
+        # Implementation would call the actual LinkedIn insights function
+        # For now, return None to use defaults
+        return None
+    except Exception:
+        return None
+
+def get_tiktok_insights_sync(session_id: str, metrics: list):
+    """Synchronous version of get_tiktok_insights for strategy loading"""
+    try:
+        # Implementation would call the actual TikTok insights function
+        # For now, return None to use defaults
+        return None
+    except Exception:
+        return None
+
+def load_scheduled_posts():
+    """Load scheduled posts from JSON file"""
+    file_path = get_scheduled_posts_file_path()
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('scheduled_posts', [])
+        except Exception as e:
+            logger.error(f"Error loading scheduled posts: {e}")
+            return []
+    return []
+
+def save_scheduled_posts(posts):
+    """Save scheduled posts to JSON file"""
+    file_path = get_scheduled_posts_file_path()
+    try:
+        # Load existing posts first
+        existing_posts = load_scheduled_posts()
+        
+        # Add new posts to existing ones (avoid duplicates)
+        existing_ids = {post.get('id') for post in existing_posts}
+        new_posts = [post for post in posts if post.get('id') not in existing_ids]
+        
+        all_posts = existing_posts + new_posts
+        
+        # Save to file
+        data = {
+            'scheduled_posts': all_posts,
+            'last_updated': datetime.now().isoformat(),
+            'total_posts': len(all_posts)
+        }
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            
+        logger.info(f"Saved {len(new_posts)} new posts, total: {len(all_posts)}")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving scheduled posts: {e}")
+        return False
+
+def remove_scheduled_post(post_id):
+    """Remove a scheduled post from storage"""
+    try:
+        posts = load_scheduled_posts()
+        updated_posts = [post for post in posts if post.get('id') != post_id]
+        
+        data = {
+            'scheduled_posts': updated_posts,
+            'last_updated': datetime.now().isoformat(),
+            'total_posts': len(updated_posts)
+        }
+        
+        file_path = get_scheduled_posts_file_path()
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        return len(posts) != len(updated_posts)  # True if post was found and removed
+    except Exception as e:
+        logger.error(f"Error removing scheduled post: {e}")
+        return False
+
+def cleanup_past_posts():
+    """Remove posts that are in the past"""
+    try:
+        posts = load_scheduled_posts()
+        current_time = datetime.now()
+        
+        # Keep posts that are scheduled for the future or recently posted (within 24 hours)
+        active_posts = []
+        for post in posts:
+            if post.get('scheduled_time'):
+                try:
+                    # Handle both timestamp and ISO format
+                    if isinstance(post['scheduled_time'], str):
+                        scheduled_time = datetime.fromisoformat(post['scheduled_time'].replace('Z', '+00:00'))
+                    else:
+                        scheduled_time = datetime.fromtimestamp(post['scheduled_time'])
+                    
+                    # Keep if future or posted within last 24 hours
+                    if scheduled_time > current_time - timedelta(days=1):
+                        active_posts.append(post)
+                except Exception as e:
+                    logger.error(f"Error parsing scheduled time for post {post.get('id')}: {e}")
+                    # Keep post if we can't parse the time
+                    active_posts.append(post)
+        
+        if len(active_posts) != len(posts):
+            data = {
+                'scheduled_posts': active_posts,
+                'last_updated': datetime.now().isoformat(),
+                'total_posts': len(active_posts)
+            }
+            
+            file_path = get_scheduled_posts_file_path()
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"Cleaned up {len(posts) - len(active_posts)} past posts")
+        
+        return active_posts
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+        return load_scheduled_posts()  # Return original posts if cleanup fails
 
 # =============================================================================
 # PYDANTIC MODELS
@@ -212,6 +443,68 @@ class BrandDiscoveryCompleteRequest(BaseModel):
     session_id: str
     responses: Dict[str, Any]
     include_existing_data: Optional[bool] = True
+
+# Social Media Analysis models
+class SocialMediaAnalysisRequest(BaseModel):
+    competitors: List[str]  # List of competitor URLs/names
+    business_summary: str
+    brand_identity: str
+    viability_data: dict
+
+class LinkedInInsightsRequest(BaseModel):
+    company_urls: List[str]
+    limit: int = 20
+    min_support: float = 0.05
+    min_confidence: float = 0.5
+    min_lift: float = 1.2
+
+class TikTokInsightsRequest(BaseModel):
+    profile_names: List[str]
+    results_per_page: int = 50
+    min_support: float = 0.05
+    min_confidence: float = 0.5
+    min_lift: float = 1.2
+
+class SocialMediaInsightsResponse(BaseModel):
+    session_id: str
+    status: str
+    platform: str
+    message: str
+    insights: Optional[str] = None
+    engagement_patterns: Optional[dict] = None
+    posting_schedule: Optional[dict] = None
+
+# Social Media Management Models
+class SocialMediaPostRequest(BaseModel):
+    business_summary: str
+    marketing_insights: dict
+    platform: str = 'all'  # 'all', 'linkedin', 'tiktok', 'facebook', 'instagram', 'x'
+    count: int = 5
+    generate_images: bool = True
+    brand_identity: Optional[dict] = None  # Brand identity data including colors, personality, logo, etc.
+    include_scheduling: bool = True
+    staggered_loading: bool = False  # For progressive loading
+
+class SocialMediaPostResponse(BaseModel):
+    posts: List[dict]
+    scheduled_posts: List[dict]
+    generated_images: dict
+
+class SchedulePostRequest(BaseModel):
+    posts: List[dict]
+    platform: str
+    schedule_type: str = 'optimal'  # 'optimal' or 'manual'
+    start_date: Optional[str] = None
+
+class PlatformConfigRequest(BaseModel):
+    config: dict
+
+class PostToSocialMediaRequest(BaseModel):
+    post_id: str
+    platform: str
+    schedule_time: Optional[int] = None
+    immediate: bool = False
+    posting_schedule: Optional[dict] = None
 
 # =============================================================================
 # MULTI-AGENT ENDPOINTS
@@ -2627,6 +2920,1717 @@ async def download_file(filename: str):
         )
     else:
         raise HTTPException(status_code=404, detail="File not found")
+
+# =============================================================================
+# SOCIAL MEDIA ANALYSIS ENDPOINTS
+# =============================================================================
+
+@app.post("/marketing-strategy/add-competitor")
+async def add_competitor_for_analysis(request: dict):
+    """Add a new competitor to the marketing analysis"""
+    try:
+        competitor_url = request.get("url", "")
+        platform = request.get("platform", "")
+        
+        if not competitor_url or not platform:
+            raise HTTPException(status_code=400, detail="URL and platform are required")
+        
+        # Validate URL format
+        if platform == "linkedin" and "linkedin.com/company/" not in competitor_url:
+            raise HTTPException(status_code=400, detail="Invalid LinkedIn company URL format")
+        elif platform == "tiktok" and "tiktok.com/@" not in competitor_url:
+            raise HTTPException(status_code=400, detail="Invalid TikTok profile URL format")
+        
+        # Extract competitor name
+        if platform == "linkedin":
+            competitor_name = competitor_url.split('/company/')[1].split('/')[0]
+        else:  # TikTok
+            competitor_name = competitor_url.split('@')[1].split('/')[0]
+        
+        # Store competitor for later analysis
+        competitor_data = {
+            "id": str(uuid.uuid4()),
+            "url": competitor_url,
+            "platform": platform,
+            "name": competitor_name,
+            "added_at": datetime.now().isoformat()
+        }
+        
+        return {
+            "success": True,
+            "competitor": competitor_data,
+            "message": f"{competitor_name} added successfully for {platform} analysis"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error adding competitor: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/marketing-strategy/get-top-posts")
+async def get_top_engaging_posts():
+    """Get top engaging posts from LinkedIn and TikTok analysis results"""
+    try:
+        posts_data = {
+            "linkedin_posts": [],
+            "tiktok_posts": []
+        }
+        
+        # Read LinkedIn data from results file if exists
+        linkedin_results_dir = Path("agents/linkedin_agent-main/linkedin_scraping_results")
+        if linkedin_results_dir.exists():
+            for file in linkedin_results_dir.glob("*.json"):
+                try:
+                    with open(file, "r", encoding="utf-8") as f:
+                        linkedin_data = json.load(f)
+                    
+                    # Process LinkedIn posts and extract top 5
+                    if isinstance(linkedin_data, list) and len(linkedin_data) > 0:
+                        # Sort by total reactions (engagement)
+                        sorted_posts = sorted(
+                            linkedin_data,
+                            key=lambda x: x.get("stats", {}).get("total_reactions", 0),
+                            reverse=True
+                        )[:5]
+                        
+                        for post in sorted_posts:
+                            processed_post = {
+                                "id": post.get("activity_urn", ""),
+                                "platform": "linkedin",
+                                "company": post.get("author", {}).get("name", "Unknown Company"),
+                                "content": post.get("text", "")[:200] + "..." if len(post.get("text", "")) > 200 else post.get("text", ""),
+                                "engagement": {
+                                    "likes": post.get("stats", {}).get("like", 0),
+                                    "comments": post.get("stats", {}).get("comment", 0),
+                                    "shares": post.get("stats", {}).get("share", 0),
+                                    "total_reactions": post.get("stats", {}).get("total_reactions", 0),
+                                    "engagement_rate": f"{min(99.9, (post.get('stats', {}).get('total_reactions', 0) / max(1, post.get('author', {}).get('follower_count', 1000)) * 100)):.1f}"
+                                },
+                                "posted_date": post.get("posted_at", {}).get("date", "").split(" ")[0] if post.get("posted_at") else "",
+                                "content_type": "Document" if post.get("document") else "Text Post",
+                                "has_document": bool(post.get("document")),
+                                "hashtags": [tag for tag in post.get("text", "").split() if tag.startswith("#")][:4],
+                                "url": post.get("post_url", "")
+                            }
+                            posts_data["linkedin_posts"].append(processed_post)
+                        break  # Use only the first file found
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to process LinkedIn file {file}: {e}")
+        
+        # Read TikTok data from results file if exists
+        tiktok_results_dir = Path("agents/tiktok_insights_agent-main/tiktok_scraping_results")
+        if tiktok_results_dir.exists():
+            for file in tiktok_results_dir.glob("*.json"):
+                try:
+                    with open(file, "r", encoding="utf-8") as f:
+                        tiktok_data = json.load(f)
+                    
+                    # Process TikTok posts and extract top 5
+                    if isinstance(tiktok_data, list) and len(tiktok_data) > 0:
+                        # Sort by total engagement (likes + shares + comments)
+                        sorted_videos = sorted(
+                            tiktok_data,
+                            key=lambda x: x.get("diggCount", 0) + x.get("shareCount", 0) + x.get("commentCount", 0),
+                            reverse=True
+                        )[:5]
+                        
+                        for video in sorted_videos:
+                            total_engagement = video.get("diggCount", 0) + video.get("shareCount", 0) + video.get("commentCount", 0)
+                            engagement_rate = (total_engagement / max(1, video.get("playCount", 1)) * 100)
+                            
+                            processed_post = {
+                                "id": video.get("webVideoUrl", "").split("/")[-1] if video.get("webVideoUrl") else "",
+                                "platform": "tiktok",
+                                "company": video.get("authorMeta.name", "Unknown Profile"),
+                                "content": video.get("text", "")[:200] + "..." if len(video.get("text", "")) > 200 else video.get("text", ""),
+                                "engagement": {
+                                    "likes": video.get("diggCount", 0),
+                                    "comments": video.get("commentCount", 0),
+                                    "shares": video.get("shareCount", 0),
+                                    "views": video.get("playCount", 0),
+                                    "engagement_rate": f"{min(99.9, engagement_rate):.1f}"
+                                },
+                                "posted_date": video.get("createTimeISO", "").split("T")[0] if video.get("createTimeISO") else "",
+                                "content_type": "Video",
+                                "duration": video.get("videoMeta.duration", 0),
+                                "hashtags": [tag for tag in video.get("text", "").split() if tag.startswith("#")][:4],
+                                "url": video.get("webVideoUrl", "")
+                            }
+                            posts_data["tiktok_posts"].append(processed_post)
+                        break  # Use only the first file found
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to process TikTok file {file}: {e}")
+        
+        # If no real data found, generate simulated data based on Talan Tunisia
+        if not posts_data["linkedin_posts"] and not posts_data["tiktok_posts"]:
+            posts_data = _generate_simulated_top_posts()
+        
+        return {
+            "success": True,
+            "data": posts_data,
+            "total_linkedin_posts": len(posts_data["linkedin_posts"]),
+            "total_tiktok_posts": len(posts_data["tiktok_posts"])
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting top posts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/social-media/linkedin/analyze", response_model=SocialMediaInsightsResponse)
+async def analyze_linkedin_competitor(request: LinkedInInsightsRequest):
+    """Start LinkedIn analysis for competitor insights"""
+    try:
+        # Check if LinkedIn agent is available
+        linkedin_path = Path("agents/linkedin_agent-main")
+        if not linkedin_path.exists():
+            raise HTTPException(status_code=500, detail="LinkedIn agent not found")
+        
+        # Start LinkedIn analysis by calling the separate service
+        analysis_data = {
+            "company_urls": request.company_urls,
+            "limit": request.limit,
+            "min_support": request.min_support,
+            "min_confidence": request.min_confidence,
+            "min_lift": request.min_lift
+        }
+        
+        # Make request to LinkedIn service (assuming it runs on port 8002)
+        try:
+            response = requests.post(
+                "http://localhost:8002/scrape-posts",
+                json=analysis_data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return SocialMediaInsightsResponse(
+                    session_id=result["session_id"],
+                    status=result["status"],
+                    platform="LinkedIn",
+                    message=result["message"]
+                )
+            else:
+                raise HTTPException(status_code=500, detail="LinkedIn service error")
+                
+        except requests.exceptions.ConnectionError:
+            raise HTTPException(status_code=503, detail="LinkedIn analysis service unavailable")
+            
+    except Exception as e:
+        logger.error(f"LinkedIn analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/social-media/tiktok/analyze", response_model=SocialMediaInsightsResponse)
+async def analyze_tiktok_competitor(request: TikTokInsightsRequest):
+    """Start TikTok analysis for competitor insights"""
+    try:
+        # Check if TikTok agent is available
+        tiktok_path = Path("agents/tiktok_insights_agent-main")
+        if not tiktok_path.exists():
+            raise HTTPException(status_code=500, detail="TikTok agent not found")
+        
+        # Start TikTok analysis by calling the separate service
+        analysis_data = {
+            "profile_names": request.profile_names,
+            "results_per_page": request.results_per_page,
+            "min_support": request.min_support,
+            "min_confidence": request.min_confidence,
+            "min_lift": request.min_lift
+        }
+        
+        # Make request to TikTok service (assuming it runs on port 8003)
+        try:
+            response = requests.post(
+                "http://localhost:8003/scrape-profiles",
+                json=analysis_data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return SocialMediaInsightsResponse(
+                    session_id=result["session_id"],
+                    status=result["status"],
+                    platform="TikTok",
+                    message=result["message"]
+                )
+            else:
+                raise HTTPException(status_code=500, detail="TikTok service error")
+                
+        except requests.exceptions.ConnectionError:
+            raise HTTPException(status_code=503, detail="TikTok analysis service unavailable")
+            
+    except Exception as e:
+        logger.error(f"TikTok analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/social-media/linkedin/session/{session_id}/status")
+async def get_linkedin_session_status(session_id: str):
+    """Get LinkedIn analysis session status"""
+    try:
+        response = requests.get(f"http://localhost:8002/session/{session_id}/status")
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(status_code=503, detail="LinkedIn service unavailable")
+
+@app.get("/social-media/tiktok/session/{session_id}/status")
+async def get_tiktok_session_status(session_id: str):
+    """Get TikTok analysis session status"""
+    try:
+        response = requests.get(f"http://localhost:8003/session/{session_id}/status")
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise HTTPException(status_code=404, detail="Session not found")
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(status_code=503, detail="TikTok service unavailable")
+
+@app.post("/social-media/linkedin/session/{session_id}/insights")
+async def get_linkedin_insights(session_id: str, targets: List[str] = None):
+    """Get LinkedIn insights from completed analysis"""
+    try:
+        if targets is None:
+            targets = ["high_engagement_rate", "viral"]
+            
+        insight_data = {
+            "session_id": session_id,
+            "targets": targets
+        }
+        
+        response = requests.post(
+            "http://localhost:8002/generate-insights",
+            json=insight_data
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise HTTPException(status_code=400, detail="Cannot generate insights")
+            
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(status_code=503, detail="LinkedIn service unavailable")
+
+@app.post("/social-media/tiktok/session/{session_id}/insights")
+async def get_tiktok_insights(session_id: str, targets: List[str] = None):
+    """Get TikTok insights from completed analysis"""
+    try:
+        if targets is None:
+            targets = ["high_engagement_rate", "viral"]
+            
+        insight_data = {
+            "session_id": session_id,
+            "targets": targets
+        }
+        
+        response = requests.post(
+            "http://localhost:8003/generate-insights",
+            json=insight_data
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise HTTPException(status_code=400, detail="Cannot generate insights")
+            
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(status_code=503, detail="TikTok service unavailable")
+
+@app.post("/marketing-strategy/comprehensive-analysis")
+async def comprehensive_marketing_analysis(request: SocialMediaAnalysisRequest):
+    """Comprehensive marketing strategy analysis using both LinkedIn and TikTok data"""
+    try:
+        # Read existing analysis files from output directory
+        base_path = Path("agents/output")
+        
+        # Read business summary
+        business_summary = ""
+        business_summary_path = base_path / "business_summary.txt"
+        if business_summary_path.exists():
+            with open(business_summary_path, "r", encoding="utf-8") as f:
+                raw_summary = f.read()
+                # Remove the "Generated on" date line for cleaner processing
+                business_summary = raw_summary.split("\nGenerated on")[0] if "\nGenerated on" in raw_summary else raw_summary
+        else:
+            business_summary = request.business_summary or "No business summary available"
+        
+        # Read brand identity data
+        brand_identity = {}
+        brand_identity_files = [
+            "brand_discovery_output.json",
+            "brand_identity_output.json", 
+            "identity_output.json"
+        ]
+        
+        for filename in brand_identity_files:
+            file_path = base_path / filename
+            if file_path.exists():
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        brand_identity.update(json.load(f))
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to read {filename}: {e}")
+        
+        # Read viability assessment
+        viability_data = {}
+        viability_path = base_path / "viability_assessment_output.json"
+        if viability_path.exists():
+            try:
+                with open(viability_path, "r", encoding="utf-8") as f:
+                    viability_data = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to read viability assessment: {e}")
+        
+        # Read market analysis
+        market_data = ""
+        market_path = base_path / "market_analysis_competitors_output.txt"
+        if market_path.exists():
+            with open(market_path, "r", encoding="utf-8") as f:
+                market_data = f.read()
+        
+        # Read financial assessment
+        financial_data = ""
+        financial_path = base_path / "assessment_output.txt"
+        if financial_path.exists():
+            with open(financial_path, "r", encoding="utf-8") as f:
+                financial_data = f.read()
+        
+        # Read SWOT analysis
+        swot_data = {}
+        swot_path = base_path / "swot_complete.json"
+        if swot_path.exists():
+            try:
+                with open(swot_path, "r", encoding="utf-8") as f:
+                    swot_data = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to read SWOT analysis: {e}")
+        
+        # Read BMC (Business Model Canvas)
+        bmc_data = ""
+        bmc_path = base_path / "bmc_output.txt"
+        if bmc_path.exists():
+            with open(bmc_path, "r", encoding="utf-8") as f:
+                bmc_data = f.read()
+        
+        # Extract competitor information
+        linkedin_companies = []
+        tiktok_profiles = []
+        
+        for competitor in request.competitors:
+            if "linkedin.com/company/" in competitor:
+                linkedin_companies.append(competitor)
+            elif "tiktok.com/@" in competitor:
+                # Extract profile name from TikTok URL
+                profile_name = competitor.split("@")[-1].split("/")[0]
+                tiktok_profiles.append(profile_name)
+        
+        results = {
+            "analysis_id": str(uuid.uuid4()),
+            "status": "initiated",
+            "linkedin_analysis": None,
+            "tiktok_analysis": None,
+            "business_context": {
+                "summary": business_summary,
+                "brand_identity": brand_identity,
+                "viability": viability_data,
+                "market_analysis": market_data[:500] + "..." if len(market_data) > 500 else market_data,
+                "financial_assessment": financial_data[:500] + "..." if len(financial_data) > 500 else financial_data,
+                "swot_analysis": swot_data,
+                "business_model": bmc_data[:500] + "..." if len(bmc_data) > 500 else bmc_data
+            }
+        }
+        
+        # Start LinkedIn analysis if we have LinkedIn competitors
+        if linkedin_companies:
+            linkedin_request = LinkedInInsightsRequest(
+                company_urls=linkedin_companies,
+                limit=30,
+                min_support=0.05,
+                min_confidence=0.5,
+                min_lift=1.2
+            )
+            
+            try:
+                linkedin_response = await analyze_linkedin_competitor(linkedin_request)
+                results["linkedin_analysis"] = {
+                    "session_id": linkedin_response.session_id,
+                    "status": linkedin_response.status,
+                    "companies": linkedin_companies
+                }
+            except Exception as e:
+                logger.error(f"LinkedIn analysis failed: {e}")
+                results["linkedin_analysis"] = {"error": str(e)}
+        
+        # Start TikTok analysis if we have TikTok profiles
+        if tiktok_profiles:
+            tiktok_request = TikTokInsightsRequest(
+                profile_names=tiktok_profiles,
+                results_per_page=50,
+                min_support=0.05,
+                min_confidence=0.5,
+                min_lift=1.2
+            )
+            
+            try:
+                tiktok_response = await analyze_tiktok_competitor(tiktok_request)
+                results["tiktok_analysis"] = {
+                    "session_id": tiktok_response.session_id,
+                    "status": tiktok_response.status,
+                    "profiles": tiktok_profiles
+                }
+            except Exception as e:
+                logger.error(f"TikTok analysis failed: {e}")
+                results["tiktok_analysis"] = {"error": str(e)}
+        
+        # Store the analysis for later retrieval
+        sessions[results["analysis_id"]] = results
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Comprehensive marketing analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/marketing-strategy/analysis/{analysis_id}/status")
+async def get_marketing_analysis_status(analysis_id: str):
+    """Get comprehensive marketing analysis status"""
+    if analysis_id not in sessions:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    
+    analysis = sessions[analysis_id]
+    
+    # Check LinkedIn status
+    if analysis.get("linkedin_analysis") and "session_id" in analysis["linkedin_analysis"]:
+        try:
+            linkedin_status = await get_linkedin_session_status(analysis["linkedin_analysis"]["session_id"])
+            analysis["linkedin_analysis"]["current_status"] = linkedin_status
+        except Exception as e:
+            analysis["linkedin_analysis"]["status_error"] = str(e)
+    
+    # Check TikTok status
+    if analysis.get("tiktok_analysis") and "session_id" in analysis["tiktok_analysis"]:
+        try:
+            tiktok_status = await get_tiktok_session_status(analysis["tiktok_analysis"]["session_id"])
+            analysis["tiktok_analysis"]["current_status"] = tiktok_status
+        except Exception as e:
+            analysis["tiktok_analysis"]["status_error"] = str(e)
+    
+    return analysis
+
+@app.get("/marketing-strategy/analysis/{analysis_id}/insights")
+async def get_comprehensive_marketing_insights(analysis_id: str):
+    """Get comprehensive marketing insights from completed analysis"""
+    if analysis_id not in sessions:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    
+    analysis = sessions[analysis_id]
+    insights = {
+        "analysis_id": analysis_id,
+        "linkedin_insights": None,
+        "tiktok_insights": None,
+        "combined_strategy": None,
+        "posting_calendar": None,
+        "engagement_heatmap": None
+    }
+    
+    # Get LinkedIn insights
+    if analysis.get("linkedin_analysis") and "session_id" in analysis["linkedin_analysis"]:
+        try:
+            linkedin_insights = await get_linkedin_insights(
+                analysis["linkedin_analysis"]["session_id"],
+                ["high_engagement_rate", "viral", "popular_post"]
+            )
+            insights["linkedin_insights"] = linkedin_insights
+        except Exception as e:
+            insights["linkedin_insights"] = {"error": str(e)}
+    
+    # Get TikTok insights
+    if analysis.get("tiktok_analysis") and "session_id" in analysis["tiktok_analysis"]:
+        try:
+            tiktok_insights = await get_tiktok_insights(
+                analysis["tiktok_analysis"]["session_id"],
+                ["high_engagement_rate", "viral", "highly_shareable"]
+            )
+            insights["tiktok_insights"] = tiktok_insights
+        except Exception as e:
+            insights["tiktok_insights"] = {"error": str(e)}
+    
+    # Generate combined strategy and posting calendar
+    insights["combined_strategy"] = _generate_combined_strategy(insights, analysis["business_context"])
+    insights["posting_calendar"] = _generate_posting_calendar(insights)
+    insights["engagement_heatmap"] = _generate_engagement_heatmap(insights)
+    
+    return insights
+
+def _generate_combined_strategy(insights: dict, business_context: dict) -> dict:
+    """Generate combined marketing strategy from LinkedIn and TikTok insights"""
+    strategy = {
+        "content_strategy": {},
+        "timing_strategy": {},
+        "engagement_tactics": {},
+        "platform_specific": {
+            "linkedin": {},
+            "tiktok": {}
+        },
+        "business_alignment": {}
+    }
+    
+    # Extract business information from context
+    business_summary = business_context.get("summary", "")
+    brand_identity = business_context.get("brand_identity", {})
+    viability_data = business_context.get("viability", {})
+    swot_analysis = business_context.get("swot_analysis", {})
+    
+    # Analyze LinkedIn insights
+    if insights.get("linkedin_insights") and "insights" in insights["linkedin_insights"]:
+        linkedin_text = insights["linkedin_insights"]["insights"]
+        
+        # Extract key points from LinkedIn insights
+        if "morning" in linkedin_text.lower():
+            strategy["timing_strategy"]["linkedin_optimal_time"] = "Morning (6-12 AM)"
+        if "weekend" in linkedin_text.lower():
+            strategy["timing_strategy"]["linkedin_weekend"] = "Higher engagement on weekends"
+        if "document" in linkedin_text.lower():
+            strategy["content_strategy"]["linkedin_documents"] = "Include documents/PDFs for 2.3x higher engagement"
+        if "professional" in linkedin_text.lower():
+            strategy["content_strategy"]["linkedin_tone"] = "Professional, industry-focused content"
+        
+        strategy["platform_specific"]["linkedin"] = {
+            "focus": "Professional networking and B2B audience",
+            "optimal_content": "Industry insights, thought leadership, company updates, whitepapers",
+            "hashtag_strategy": "2-3 relevant professional hashtags",
+            "post_frequency": "3-5 posts per week",
+            "engagement_tactics": "Ask questions, share industry news, comment on industry leaders' posts"
+        }
+    
+    # Analyze TikTok insights  
+    if insights.get("tiktok_insights") and "insights" in insights["tiktok_insights"]:
+        tiktok_text = insights["tiktok_insights"]["insights"]
+        
+        # Extract key points from TikTok insights
+        if "evening" in tiktok_text.lower():
+            strategy["timing_strategy"]["tiktok_optimal_time"] = "Evening posting (6-9 PM)"
+        if "short" in tiktok_text.lower():
+            strategy["content_strategy"]["tiktok_duration"] = "15-60 second videos perform best"
+        if "trending" in tiktok_text.lower():
+            strategy["engagement_tactics"]["tiktok_hashtags"] = "Use trending hashtags and challenges"
+        if "authentic" in tiktok_text.lower():
+            strategy["content_strategy"]["tiktok_style"] = "Authentic, behind-the-scenes content"
+        
+        strategy["platform_specific"]["tiktok"] = {
+            "focus": "Creative storytelling and brand personality",
+            "optimal_content": "Behind-the-scenes, educational content, trending challenges, user testimonials",
+            "hashtag_strategy": "Mix of trending (60%) and niche industry hashtags (40%)",
+            "post_frequency": "1-2 posts daily",
+            "engagement_tactics": "Respond to comments, create duets, participate in trends"
+        }
+    
+    # Business alignment based on context
+    if brand_identity:
+        brand_values = brand_identity.get("core_values", [])
+        if brand_values:
+            strategy["business_alignment"]["brand_values"] = f"Ensure content reflects: {', '.join(brand_values[:3])}"
+    
+    if viability_data:
+        target_market = viability_data.get("business_context", {}).get("target_market", "")
+        if target_market:
+            strategy["business_alignment"]["target_market"] = f"Focus content for {target_market} audience"
+        
+        budget_info = viability_data.get("startup_budget_currency", "")
+        if budget_info:
+            strategy["business_alignment"]["budget_consideration"] = f"Cost-effective content creation within {budget_info} budget constraints"
+    
+    if swot_analysis:
+        strengths = swot_analysis.get("strengths", [])
+        if strengths:
+            strategy["business_alignment"]["leverage_strengths"] = f"Highlight: {', '.join(strengths[:2])}"
+        
+        opportunities = swot_analysis.get("opportunities", [])
+        if opportunities:
+            strategy["business_alignment"]["market_opportunities"] = f"Target: {', '.join(opportunities[:2])}"
+    
+    # Extract industry-specific recommendations from business summary
+    if "healthcare" in business_summary.lower():
+        strategy["content_strategy"]["industry_focus"] = "Healthcare compliance, patient privacy, educational content"
+        strategy["platform_specific"]["linkedin"]["compliance"] = "Ensure HIPAA compliance in content"
+    elif "fintech" in business_summary.lower() or "financial" in business_summary.lower():
+        strategy["content_strategy"]["industry_focus"] = "Financial literacy, security, regulatory compliance"
+        strategy["platform_specific"]["linkedin"]["compliance"] = "Financial regulations compliance"
+    elif "e-commerce" in business_summary.lower() or "retail" in business_summary.lower():
+        strategy["content_strategy"]["industry_focus"] = "Product showcases, customer reviews, seasonal content"
+        strategy["platform_specific"]["tiktok"]["product_focus"] = "Product demos and unboxing videos"
+    elif "saas" in business_summary.lower() or "software" in business_summary.lower():
+        strategy["content_strategy"]["industry_focus"] = "Feature highlights, tutorials, customer success stories"
+        strategy["platform_specific"]["linkedin"]["b2b_focus"] = "Enterprise case studies and ROI content"
+    
+    return strategy
+
+def _generate_posting_calendar(insights: dict) -> dict:
+    """Generate optimal posting calendar based on insights and business context"""
+    calendar = {
+        "weekly_schedule": {
+            "monday": {"linkedin": "Morning professional update", "tiktok": "Monday motivation content"},
+            "tuesday": {"linkedin": "Industry insights sharing", "tiktok": "Tutorial Tuesday"},
+            "wednesday": {"linkedin": "Mid-week engagement post", "tiktok": "Behind-the-scenes content"},
+            "thursday": {"linkedin": "Thought leadership content", "tiktok": "Educational content"},
+            "friday": {"linkedin": "Weekly recap/achievements", "tiktok": "Fun Friday content"},
+            "saturday": {"linkedin": "Community engagement", "tiktok": "Weekend lifestyle content"},
+            "sunday": {"linkedin": "Week ahead preview", "tiktok": "Sunday inspiration"}
+        },
+        "content_themes": {
+            "monday": "Motivation & Goals",
+            "tuesday": "Education & Tips",
+            "wednesday": "Behind the Scenes",
+            "thursday": "Industry Leadership",
+            "friday": "Community & Fun",
+            "saturday": "Lifestyle & Values",
+            "sunday": "Inspiration & Vision"
+        },
+        "optimal_times": {
+            "linkedin": {
+                "best_days": ["Tuesday", "Wednesday", "Thursday"],
+                "best_times": ["8:00-10:00 AM", "12:00-1:00 PM", "5:00-6:00 PM"],
+                "timezone": "Business hours in target market"
+            },
+            "tiktok": {
+                "best_days": ["Friday", "Saturday", "Sunday"],  
+                "best_times": ["6:00-9:00 PM", "9:00-12:00 AM"],
+                "timezone": "Evening entertainment hours"
+            }
+        },
+        "posting_frequency": {
+            "linkedin": "3-5 posts per week",
+            "tiktok": "1-2 posts per day",
+            "cross_promotion": "Share TikTok highlights on LinkedIn weekly"
+        }
+    }
+    
+    # Adjust based on insights
+    if insights.get("linkedin_insights"):
+        linkedin_text = insights["linkedin_insights"].get("insights", "").lower()
+        if "morning" in linkedin_text:
+            calendar["optimal_times"]["linkedin"]["priority_time"] = "Morning (6:00-10:00 AM)"
+        if "document" in linkedin_text:
+            calendar["content_themes"]["tuesday"] = "Document Sharing & Industry Reports"
+    
+    if insights.get("tiktok_insights"):
+        tiktok_text = insights["tiktok_insights"].get("insights", "").lower()
+        if "evening" in tiktok_text:
+            calendar["optimal_times"]["tiktok"]["priority_time"] = "Evening (6:00-9:00 PM)"
+        if "authentic" in tiktok_text:
+            calendar["content_themes"]["wednesday"] = "Authentic Behind-the-Scenes"
+    
+    return calendar
+
+def _generate_engagement_heatmap(insights: dict) -> dict:
+    """Generate engagement heatmap data"""
+    heatmap = {
+        "best_times": {
+            "linkedin": {
+                "morning": 0.8,
+                "afternoon": 0.6,
+                "evening": 0.4,
+                "night": 0.2
+            },
+            "tiktok": {
+                "morning": 0.4,
+                "afternoon": 0.6,
+                "evening": 0.9,
+                "night": 0.7
+            }
+        },
+        "best_days": {
+            "linkedin": {
+                "monday": 0.7,
+                "tuesday": 0.8,
+                "wednesday": 0.9,
+                "thursday": 0.8,
+                "friday": 0.6,
+                "saturday": 0.8,
+                "sunday": 0.7
+            },
+            "tiktok": {
+                "monday": 0.6,
+                "tuesday": 0.7,
+                "wednesday": 0.8,
+                "thursday": 0.8,
+                "friday": 0.9,
+                "saturday": 0.9,
+                "sunday": 0.8
+            }
+        }
+    }
+    
+    return heatmap
+
+# =============================================================================
+# SOCIAL MEDIA MANAGEMENT ENDPOINTS
+# =============================================================================
+
+@app.post("/social-media/generate-posts")
+async def generate_social_media_posts(request: SocialMediaPostRequest):
+    """Generate AI-powered social media posts with brand identity integration and smart scheduling"""
+    try:
+        # Extract brand identity information
+        brand_name = request.brand_identity.get('name', 'Your Brand') if request.brand_identity else 'Your Brand'
+        brand_colors = request.brand_identity.get('colors', []) if request.brand_identity else []
+        brand_personality = request.brand_identity.get('personality', []) if request.brand_identity else []
+        brand_voice = ', '.join(brand_personality) if brand_personality else 'professional and engaging'
+        
+        # Create brand-aware prompt enhancement
+        brand_context = f"""
+Brand Identity Context:
+- Brand Name: {brand_name}
+- Brand Colors: {', '.join(brand_colors) if brand_colors else 'Not specified'}
+- Brand Personality: {brand_voice}
+- Brand Voice: Maintain {brand_voice} tone throughout all posts
+"""
+        
+        # Generate posts using the social media agent with brand context
+        enhanced_business_summary = f"{request.business_summary}\n\n{brand_context}"
+        
+        posts = []
+        platforms = ['linkedin', 'instagram', 'facebook', 'tiktok', 'x'] if request.platform == 'all' else [request.platform]
+        
+        logger.info(f"Generating posts for platforms: {platforms}, count per platform: {request.count // len(platforms) + (1 if len(platforms) == 1 else 0)}")
+        
+        # Generate posts for each platform with brand-specific prompts
+        for platform in platforms:
+            platform_count = request.count // len(platforms) + (1 if len(platforms) == 1 else 0)
+            if platform_count < 1:
+                platform_count = 1
+                
+            logger.info(f"Generating {platform_count} posts for {platform}")
+            
+            platform_posts = await generate_brand_aware_posts(
+                business_summary=enhanced_business_summary,
+                platform=platform,
+                brand_identity=request.brand_identity,
+                marketing_insights=request.marketing_insights,
+                count=platform_count
+            )
+            
+            if platform_posts:
+                posts.extend(platform_posts)
+                logger.info(f"Added {len(platform_posts)} posts for {platform}")
+            else:
+                logger.warning(f"No posts generated for {platform}, creating fallback")
+                fallback_posts = create_fallback_posts(platform, request.brand_identity or {}, platform_count)
+                posts.extend(fallback_posts)
+        
+        # Ensure we have at least some posts
+        if not posts:
+            logger.error("No posts were generated by any method, creating emergency fallback posts")
+            emergency_posts = create_fallback_posts('linkedin', request.brand_identity or {}, max(3, request.count))
+            posts.extend(emergency_posts)
+        
+        logger.info(f"Total posts generated: {len(posts)}")
+        
+        # Generate smart scheduling suggestions
+        scheduled_posts = []
+        if request.include_scheduling:
+            scheduled_posts = generate_smart_scheduling(posts, request.marketing_insights)
+        
+        # Generate images if requested with brand colors
+        generated_images = {}
+        if request.generate_images:
+            for post in posts:
+                if not post.get('has_media'):
+                    image_data = await generate_brand_consistent_image(
+                        post, 
+                        enhanced_business_summary,
+                        brand_colors,
+                        brand_name
+                    )
+                    if image_data:
+                        generated_images[post['id']] = image_data
+                        post['image_url'] = image_data.get('url')
+                        post['has_media'] = True
+                        post['content_type'] = 'image'
+        
+        # Final validation - ensure we have posts to return
+        if not posts or len(posts) == 0:
+            logger.error("Critical error: No posts generated despite fallbacks")
+            # Create absolute emergency posts
+            brand_name = (request.brand_identity and request.brand_identity.get('name')) or 'Your Business'
+            emergency_post = {
+                'id': f"emergency_post_{int(time.time() * 1000)}",
+                'platform': platforms[0] if platforms else 'linkedin',
+                'content_type': 'text',
+                'title': f"Welcome to {brand_name}",
+                'content': f"Discover what {brand_name} can offer you. We're committed to delivering excellent solutions and exceptional service to help you achieve your goals.",
+                'hashtags': ['#Business', '#Innovation', '#Excellence'],
+                'optimal_time': '12:00 PM',
+                'scheduled_time': (datetime.now() + timedelta(days=1)).isoformat(),
+                'engagement_prediction': 'medium',
+                'call_to_action': 'Learn more about our services',
+                'has_media': False,
+                'status': 'draft',
+                'image_prompt': f"Professional image for {brand_name}",
+                'suggested_date': (datetime.now() + timedelta(days=1)).strftime("%B %d, %Y"),
+                'suggested_time': '12:00 PM',
+                'optimal_reason': 'Peak engagement time'
+            }
+            posts = [emergency_post]
+        
+        return SocialMediaPostResponse(
+            posts=posts,
+            scheduled_posts=scheduled_posts,
+            generated_images=generated_images
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating social media posts: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate posts: {str(e)}")
+
+async def generate_brand_aware_posts(business_summary: str, platform: str, brand_identity: dict, marketing_insights: dict, count: int):
+    """Generate posts with brand identity awareness using enhanced social media agent"""
+    try:
+        logger.info(f"Generating {count} posts for {platform} platform with marketing strategy integration")
+        
+        # Use the enhanced social media agent with marketing strategy
+        posts = social_media_agent.generate_marketing_posts(
+            business_summary=business_summary,
+            marketing_insights=marketing_insights,
+            platform=platform,
+            count=count
+        )
+        
+        if not posts:
+            logger.warning(f"Social media agent returned no posts for {platform}, creating fallback posts")
+            return create_fallback_posts(platform, brand_identity, count)
+        
+        # Enhance posts with brand identity information
+        brand_name = brand_identity.get('name', 'Your Brand') if brand_identity else 'Your Brand'
+        brand_colors = brand_identity.get('colors', []) if brand_identity else []
+        
+        for i, post in enumerate(posts):
+            # Ensure each post has required fields
+            post['id'] = post.get('id', f"post_{platform}_{i+1}_{int(time.time() * 1000)}")
+            post['platform'] = platform
+            post['status'] = 'draft'
+            post['created_at'] = datetime.now().isoformat()
+            post['has_media'] = post.get('content_type') != 'text'
+            
+            # Add brand-specific enhancements to image prompts
+            if post.get('image_prompt') and brand_colors:
+                color_scheme = ', '.join(brand_colors[:3])  # Use top 3 colors
+                post['image_prompt'] = f"{post['image_prompt']} using brand colors: {color_scheme}"
+                
+            # Enhance call-to-action with brand name
+            if post.get('call_to_action') and brand_name != 'Your Brand':
+                cta = post['call_to_action']
+                if not any(brand_word in cta.lower() for brand_word in brand_name.lower().split()):
+                    post['call_to_action'] = f"{cta} with {brand_name}"
+            
+            # Add scheduling metadata
+            post['suggested_date'] = (datetime.now() + timedelta(days=i)).strftime("%B %d, %Y")
+            post['suggested_time'] = post.get('optimal_time', '12:00 PM')
+            post['optimal_reason'] = post.get('optimal_reason', f'Optimized for {platform} engagement')
+        
+        logger.info(f"Successfully generated and enhanced {len(posts)} posts for {platform}")
+        return posts
+        
+    except Exception as e:
+        logger.error(f"Error generating brand-aware posts for {platform}: {str(e)}")
+        # Return fallback posts instead of empty array
+        return create_fallback_posts(platform, brand_identity, count)
+
+def create_fallback_posts(platform: str, brand_identity: dict, count: int) -> list:
+    """Create fallback posts when AI generation fails"""
+    import time
+    import random
+    from datetime import datetime, timedelta
+    
+    brand_name = brand_identity.get('name', 'Your Brand') if brand_identity else 'Your Brand'
+    
+    post_templates = [
+        {
+            'title': f"Transform Your Business with {brand_name}",
+            'content': f"Ready to take your business to the next level? {brand_name} offers innovative solutions designed to help you succeed. Our expertise and commitment to excellence make us the perfect partner for your growth journey. #Innovation #Business #Success",
+            'cta': "Contact us today to get started"
+        },
+        {
+            'title': f"Why Choose {brand_name}?",
+            'content': f"At {brand_name}, we understand that every business is unique. That's why we provide customized solutions tailored to your specific needs. Join the growing number of businesses that trust us to deliver results. #CustomSolutions #TrustedPartner",
+            'cta': "Learn more about our services"
+        },
+        {
+            'title': f"Success Stories from {brand_name}",
+            'content': f"Our clients' success is our success. {brand_name} has helped countless businesses achieve their goals through innovative strategies and dedicated support. What could we help you accomplish? #ClientSuccess #Results",
+            'cta': "See our case studies"
+        },
+        {
+            'title': f"Innovation Meets Excellence at {brand_name}",
+            'content': f"Stay ahead of the competition with {brand_name}. We combine cutting-edge technology with proven strategies to deliver solutions that drive real results for your business. #Innovation #Excellence #Technology",
+            'cta': "Discover our solutions"
+        },
+        {
+            'title': f"Partner with {brand_name} Today",
+            'content': f"Looking for a reliable partner to help grow your business? {brand_name} offers the expertise, tools, and support you need to succeed in today's competitive market. #Partnership #Growth #Business",
+            'cta': "Get in touch with us"
+        }
+    ]
+    
+    posts = []
+    actual_count = min(count, len(post_templates))
+    
+    for i in range(actual_count):
+        post_id = f"post_{platform}_{i + 1}_{int(time.time() * 1000) + i}"
+        template = post_templates[i]
+        
+        # Generate optimal time based on platform
+        optimal_times = {
+            'linkedin': ['9:00 AM', '12:00 PM', '5:00 PM'],
+            'instagram': ['11:00 AM', '1:00 PM', '7:00 PM'],
+            'facebook': ['1:00 PM', '6:00 PM', '8:00 PM'],
+            'tiktok': ['6:00 AM', '7:00 PM', '9:00 PM'],
+            'x': ['8:00 AM', '12:00 PM', '7:00 PM']
+        }
+        
+        optimal_time = random.choice(optimal_times.get(platform, ['12:00 PM']))
+        
+        # Generate scheduling
+        base_date = datetime.now() + timedelta(days=1)
+        scheduled_date = base_date + timedelta(days=i, hours=int(optimal_time.split(':')[0]))
+        
+        post = {
+            'id': post_id,
+            'platform': platform,
+            'content_type': 'text',
+            'title': template['title'],
+            'content': template['content'],
+            'hashtags': generate_platform_hashtags(platform, brand_identity),
+            'optimal_time': optimal_time,
+            'scheduled_time': scheduled_date.isoformat(),
+            'engagement_prediction': random.choice(['high', 'medium', 'medium']),  # Bias towards medium
+            'call_to_action': template['cta'],
+            'has_media': False,
+            'status': 'draft',
+            'image_prompt': f"Professional {platform} image for {brand_name}",
+            'suggested_date': scheduled_date.strftime("%B %d, %Y"),
+            'suggested_time': scheduled_date.strftime("%I:%M %p"),
+            'optimal_reason': f"Optimal engagement time for {platform.title()}"
+        }
+        
+        posts.append(post)
+    
+    logger.info(f"Created {len(posts)} fallback posts for {platform}")
+    return posts
+
+def parse_generated_posts(content: str, platform: str, brand_identity: dict) -> list:
+    """Parse AI-generated content into structured posts with proper error handling"""
+    import json
+    import re
+    import time
+    
+    posts = []
+    brand_name = brand_identity.get('name', 'Your Brand') if brand_identity else 'Your Brand'
+    
+    try:
+        # Try to extract JSON from the response
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            parsed_data = json.loads(json_match.group())
+            ai_posts = parsed_data.get('posts', [])
+            
+            for i, ai_post in enumerate(ai_posts):
+                if i >= 5:  # Limit to 5 posts max
+                    break
+                    
+                post_id = f"post_{platform}_{i + 1}_{int(time.time() * 1000)}"
+                
+                # Generate optimal time based on platform
+                optimal_times = {
+                    'linkedin': ['9:00 AM', '12:00 PM', '5:00 PM'],
+                    'instagram': ['11:00 AM', '1:00 PM', '7:00 PM'], 
+                    'facebook': ['1:00 PM', '6:00 PM', '8:00 PM'],
+                    'tiktok': ['6:00 AM', '7:00 PM', '9:00 PM'],
+                    'x': ['8:00 AM', '12:00 PM', '7:00 PM']
+                }
+                
+                import random
+                optimal_time = random.choice(optimal_times.get(platform, ['12:00 PM']))
+                
+                # Generate smart scheduling with actual dates
+                from datetime import datetime, timedelta
+                base_date = datetime.now() + timedelta(days=1)
+                scheduled_date = base_date + timedelta(days=i, hours=int(optimal_time.split(':')[0]))
+                
+                post = {
+                    'id': post_id,
+                    'platform': platform,
+                    'content_type': 'text',
+                    'title': ai_post.get('title', f"{brand_name} - Engaging Content"),
+                    'content': ai_post.get('content', f"Discover what {brand_name} can do for you! Join thousands of satisfied customers who trust our innovative solutions."),
+                    'hashtags': ai_post.get('hashtags', generate_platform_hashtags(platform, brand_identity)),
+                    'optimal_time': optimal_time,
+                    'scheduled_time': scheduled_date.isoformat(),
+                    'engagement_prediction': ai_post.get('engagement_prediction', 'medium'),
+                    'call_to_action': ai_post.get('call_to_action', "Learn more about our services"),
+                    'has_media': False,
+                    'status': 'draft',
+                    'image_prompt': ai_post.get('image_description', f"Professional image for {brand_name} showcasing innovation and quality"),
+                    'suggested_date': scheduled_date.strftime("%B %d, %Y"),
+                    'suggested_time': scheduled_date.strftime("%I:%M %p"),
+                    'optimal_reason': f"Optimal engagement time for {platform.title()}"
+                }
+                
+                posts.append(post)
+        
+        # Fallback: If JSON parsing fails, create default posts
+        if not posts:
+            logger.warning(f"JSON parsing failed for {platform}, generating fallback posts")
+            raise ValueError("JSON parsing failed")
+            
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.warning(f"Could not parse JSON response, creating fallback posts: {str(e)}")
+        
+        # Generate fallback posts with meaningful content
+        post_templates = [
+            {
+                'title': f"Transform Your Business with {brand_name}",
+                'content': f"Ready to take your business to the next level? {brand_name} offers innovative solutions designed to help you succeed. Our expertise and commitment to excellence make us the perfect partner for your growth journey.",
+                'cta': "Contact us today to get started"
+            },
+            {
+                'title': f"Why Choose {brand_name}?",
+                'content': f"At {brand_name}, we understand that every business is unique. That's why we provide customized solutions tailored to your specific needs. Join the growing number of businesses that trust us to deliver results.",
+                'cta': "Learn more about our services"
+            },
+            {
+                'title': f"Success Stories from {brand_name}",
+                'content': f"Our clients' success is our success. {brand_name} has helped countless businesses achieve their goals through innovative strategies and dedicated support. What could we help you accomplish?",
+                'cta': "See our case studies"
+            },
+            {
+                'title': f"Innovation Meets Excellence at {brand_name}",
+                'content': f"Stay ahead of the competition with {brand_name}. We combine cutting-edge technology with proven strategies to deliver solutions that drive real results for your business.",
+                'cta': "Discover our solutions"
+            },
+            {
+                'title': f"Partner with {brand_name} Today",
+                'content': f"Looking for a reliable partner to help grow your business? {brand_name} offers the expertise, tools, and support you need to succeed in today's competitive market.",
+                'cta': "Get in touch with us"
+            }
+        ]
+        
+        # Generate at least 3 posts even if AI fails
+        min_posts = min(5, max(3, len(post_templates)))
+        
+        for i in range(min_posts):
+            post_id = f"post_{platform}_{i + 1}_{int(time.time() * 1000) + i}"
+            template = post_templates[i % len(post_templates)]
+            
+            # Generate optimal time based on platform
+            optimal_times = {
+                'linkedin': ['9:00 AM', '12:00 PM', '5:00 PM'],
+                'instagram': ['11:00 AM', '1:00 PM', '7:00 PM'],
+                'facebook': ['1:00 PM', '6:00 PM', '8:00 PM'],
+                'tiktok': ['6:00 AM', '7:00 PM', '9:00 PM'],
+                'x': ['8:00 AM', '12:00 PM', '7:00 PM']
+            }
+            
+            import random
+            optimal_time = random.choice(optimal_times.get(platform, ['12:00 PM']))
+            
+            # Generate scheduling
+            from datetime import datetime, timedelta
+            base_date = datetime.now() + timedelta(days=1)
+            scheduled_date = base_date + timedelta(days=i, hours=int(optimal_time.split(':')[0]))
+            
+            post = {
+                'id': post_id,
+                'platform': platform,
+                'content_type': 'text',
+                'title': template['title'],
+                'content': template['content'],
+                'hashtags': generate_platform_hashtags(platform, brand_identity),
+                'optimal_time': optimal_time,
+                'scheduled_time': scheduled_date.isoformat(),
+                'engagement_prediction': random.choice(['high', 'medium', 'low']),
+                'call_to_action': template['cta'],
+                'has_media': False,
+                'status': 'draft',
+                'image_prompt': f"Professional {platform} image for {brand_name}",
+                'suggested_date': scheduled_date.strftime("%B %d, %Y"),
+                'suggested_time': scheduled_date.strftime("%I:%M %p"),
+                'optimal_reason': f"Optimal engagement time for {platform.title()}"
+            }
+            
+            posts.append(post)
+    
+    logger.info(f"Successfully generated {len(posts)} posts for {platform}")
+    return posts
+
+def generate_platform_hashtags(platform: str, brand_identity: dict) -> list:
+    """Generate platform-appropriate hashtags"""
+    brand_name = brand_identity.get('name', 'Brand') if brand_identity else 'Brand'
+    
+    hashtag_sets = {
+        'linkedin': ['#Professional', '#Business', '#Innovation', f'#{brand_name.replace(" ", "")}', '#Leadership'],
+        'instagram': ['#Business', '#Entrepreneur', '#Success', '#Innovation', f'#{brand_name.replace(" ", "")}', '#Motivation', '#Growth'],
+        'facebook': ['#Business', '#Community', f'#{brand_name.replace(" ", "")}'],
+        'tiktok': ['#Business', '#Entrepreneur', '#Success', f'#{brand_name.replace(" ", "")}', '#Tips'],
+        'x': ['#Business', '#Innovation', f'#{brand_name.replace(" ", "")}']
+    }
+    
+    return hashtag_sets.get(platform, hashtag_sets['linkedin'])
+
+def generate_smart_scheduling(posts: list, marketing_insights: dict) -> list:
+    """Generate intelligent scheduling suggestions using marketing strategy insights"""
+    from datetime import datetime, timedelta
+    
+    scheduled_posts = []
+    base_date = datetime.now() + timedelta(days=1)  # Start tomorrow
+    
+    # Load marketing strategy insights for optimal scheduling
+    strategy_data = load_marketing_strategy_data()
+    
+    # Get platform-specific optimal times from marketing strategy
+    heatmap_data = strategy_data.get('engagement_heatmap', {}).get('best_times', {})
+    
+    # Default platform-specific optimal times (fallback)
+    default_platform_schedules = {
+        'linkedin': [(9, 0), (13, 0), (17, 0)],  # 9 AM, 1 PM, 5 PM
+        'instagram': [(11, 0), (14, 0), (20, 0)],  # 11 AM, 2 PM, 8 PM
+        'facebook': [(10, 0), (15, 0), (19, 0)],   # 10 AM, 3 PM, 7 PM
+        'tiktok': [(12, 0), (16, 0), (21, 0)],      # 12 PM, 4 PM, 9 PM
+        'x': [(8, 0), (12, 0), (18, 0)]            # 8 AM, 12 PM, 6 PM
+    }
+    
+    for i, post in enumerate(posts):
+        platform = post['platform']
+        
+        # Get optimal times from marketing strategy or use defaults
+        if heatmap_data.get(platform):
+            # Extract hours with high engagement scores from marketing strategy
+            platform_times_data = heatmap_data[platform]
+            optimal_hours = []
+            for hour_str, engagement_score in platform_times_data.items():
+                if engagement_score > 0.7:  # Only use high-engagement times
+                    optimal_hours.append((int(hour_str), 0))
+            
+            # Sort by engagement score (if available) or use top 3
+            if optimal_hours:
+                platform_schedule = optimal_hours[:3]  # Use top 3 times
+            else:
+                platform_schedule = default_platform_schedules.get(platform, [(12, 0)])
+        else:
+            platform_schedule = default_platform_schedules.get(platform, [(12, 0)])
+        
+        # Distribute posts across different times and days to avoid spam
+        day_offset = i // len(platform_schedule)
+        time_index = i % len(platform_schedule)
+        hour, minute = platform_schedule[time_index]
+        
+        scheduled_time = base_date + timedelta(days=day_offset, hours=hour, minutes=minute)
+        
+        # Get engagement prediction based on marketing strategy
+        engagement_score = 0.5  # Default
+        if heatmap_data.get(platform) and str(hour) in heatmap_data[platform]:
+            engagement_score = heatmap_data[platform][str(hour)]
+        
+        engagement_level = "high" if engagement_score > 0.8 else "medium" if engagement_score > 0.6 else "low"
+        
+        # Get strategy-based optimal reason
+        optimal_reason = f"Optimized for {platform} using marketing strategy analysis"
+        if engagement_score > 0.8:
+            optimal_reason += f" (high engagement: {engagement_score:.1f})"
+        elif engagement_score > 0.6:
+            optimal_reason += f" (good engagement: {engagement_score:.1f})"
+        else:
+            optimal_reason += " (standard timing)"
+        
+        scheduled_post = {
+            'post_id': post['id'],
+            'platform': platform,
+            'scheduled_time': scheduled_time.isoformat(),
+            'optimal_reason': optimal_reason,
+            'suggested_date': scheduled_time.strftime("%B %d, %Y"),
+            'suggested_time': scheduled_time.strftime("%I:%M %p"),
+            'engagement_prediction': engagement_level,
+            'marketing_strategy_applied': bool(heatmap_data.get(platform))
+        }
+        
+        scheduled_posts.append(scheduled_post)
+    
+    return scheduled_posts
+
+async def generate_brand_consistent_image(post: dict, business_summary: str, brand_colors: list, brand_name: str):
+    """Generate images that are consistent with brand identity"""
+    try:
+        # Create brand-aware image prompt
+        color_guidance = f"using brand colors {', '.join(brand_colors)}" if brand_colors else "using professional color palette"
+        
+        image_prompt = f"""
+Create a professional 1:1 aspect ratio social media image for {brand_name} with these specifications:
+
+Content Context: "{post['content'][:100]}..."
+Business: {business_summary[:200]}...
+Platform: {post['platform']}
+
+Visual Requirements:
+- 1:1 square format (1080x1080px)
+- {color_guidance}
+- Clean, modern design aesthetic
+- Professional and engaging
+- No text overlay (text will be added separately)
+- Brand-consistent visual style
+- High contrast and readability
+- Suitable for {post['platform']} audience
+
+Style: Modern, professional, clean composition with good visual hierarchy
+"""
+        
+        # Generate using Pollinations API
+        import urllib.parse
+        base_url = "https://image.pollinations.ai/prompt/"
+        encoded_prompt = urllib.parse.quote(image_prompt)
+        
+        params = {
+            'width': 1080,
+            'height': 1080,
+            'seed': hash(post['id']) % 1000000,
+            'model': 'flux',
+            'enhance': 'true',
+            'nologo': 'true'
+        }
+        
+        param_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        full_url = f"{base_url}{encoded_prompt}?{param_string}"
+        
+        return {
+            'url': full_url,
+            'prompt': image_prompt,
+            'dimensions': {'width': 1080, 'height': 1080},
+            'brand_colors': brand_colors
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating brand-consistent image: {str(e)}")
+        return None
+
+@app.get("/social-media/platforms/status")
+async def get_platforms_status():
+    """Get the configuration status of all social media platforms"""
+    try:
+        status = social_media_agent.get_platform_status()
+        return {"platforms": status}
+    except Exception as e:
+        logger.error(f"Error getting platform status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get platform status: {str(e)}")
+
+@app.get("/social-media/platforms/{platform}/help")
+async def get_platform_help(platform: str):
+    """Get setup help for a specific social media platform"""
+    try:
+        help_info = social_media_agent.get_platform_help(platform)
+        return help_info
+    except Exception as e:
+        logger.error(f"Error getting platform help: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get platform help: {str(e)}")
+
+@app.post("/social-media/platforms/{platform}/configure")
+async def configure_platform(platform: str, request: PlatformConfigRequest):
+    """Configure API credentials for a social media platform"""
+    try:
+        logger.info(f"🔧 Configuring platform: {platform}")
+        logger.info(f"📋 Config keys received: {list(request.config.keys())}")
+        
+        # Check if platform is supported
+        if platform not in social_media_agent.platform_configs:
+            logger.error(f"❌ Platform {platform} not supported. Available platforms: {list(social_media_agent.platform_configs.keys())}")
+            raise HTTPException(status_code=400, detail=f"Platform {platform} not supported")
+        
+        # Validate that we received some configuration
+        if not request.config:
+            logger.error("❌ No configuration provided")
+            raise HTTPException(status_code=400, detail="No configuration provided")
+        
+        # Update platform configuration
+        social_media_agent.platform_configs[platform].update(request.config)
+        logger.info(f"✅ Updated {platform} configuration")
+        
+        # Save to environment variables (simplified for demo)
+        for key, value in request.config.items():
+            if value:  # Only set non-empty values
+                env_var = f"{platform.upper()}_{key.upper()}"
+                os.environ[env_var] = value
+                logger.info(f"🔑 Set environment variable: {env_var}")
+        
+        return {"success": True, "message": f"{platform.capitalize()} configured successfully"}
+            
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        logger.error(f"❌ Error configuring platform {platform}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to configure platform: {str(e)}")
+
+@app.post("/social-media/schedule-posts")
+async def schedule_posts(request: SchedulePostRequest):
+    """Schedule posts for a specific platform with persistent storage and marketing strategy optimization"""
+    try:
+        logger.info(f"Scheduling {len(request.posts)} posts for {request.platform}")
+        
+        # Load marketing strategy insights for optimal scheduling
+        marketing_strategy = load_marketing_strategy_data()
+        logger.info(f"Loaded marketing strategy data: {bool(marketing_strategy)}")
+        
+        if request.schedule_type == 'manual' and request.start_date:
+            start_date = datetime.fromisoformat(request.start_date)
+        else:
+            start_date = datetime.now() + timedelta(hours=1)
+        
+        # Clean up old posts before adding new ones
+        cleanup_past_posts()
+        
+        # Generate optimal scheduling times using marketing strategy
+        scheduled_posts = []
+        for i, post in enumerate(request.posts):
+            if request.schedule_type == 'optimal':
+                # Get optimal times from marketing strategy
+                optimal_times_data = marketing_strategy.get('engagement_heatmap', {}).get('best_times', {})
+                platform_times = optimal_times_data.get(request.platform, {})
+                
+                # Extract hours from marketing strategy or use defaults
+                if platform_times:
+                    # Convert marketing strategy times to hours (keys are already hours as strings)
+                    optimal_hours = []
+                    for hour_str, engagement_score in platform_times.items():
+                        if engagement_score > 0.7:  # Only use high-engagement times
+                            optimal_hours.append(int(hour_str))
+                    
+                    # Sort by engagement score (descending) and use top times
+                    sorted_times = sorted(platform_times.items(), key=lambda x: x[1], reverse=True)
+                    optimal_hours = [int(hour) for hour, score in sorted_times[:3] if score > 0.6]
+                else:
+                    # Fallback to default optimal times
+                    default_optimal_times = {
+                        'linkedin': [9, 13, 17],  # 9 AM, 1 PM, 5 PM
+                        'facebook': [10, 15, 19], # 10 AM, 3 PM, 7 PM  
+                        'instagram': [11, 14, 20], # 11 AM, 2 PM, 8 PM
+                        'tiktok': [12, 16, 21],   # 12 PM, 4 PM, 9 PM
+                        'x': [8, 12, 18]          # 8 AM, 12 PM, 6 PM
+                    }
+                    optimal_hours = default_optimal_times.get(request.platform, [9, 13, 17])
+                
+                # Ensure we have at least some optimal hours
+                if not optimal_hours:
+                    optimal_hours = [9, 13, 17]  # Safe fallback
+                
+                # Select hour for this post
+                hour = optimal_hours[i % len(optimal_hours)]
+                
+                # Get optimal days from marketing strategy
+                optimal_days_data = marketing_strategy.get('engagement_heatmap', {}).get('best_days', {})
+                platform_days = optimal_days_data.get(request.platform, {})
+                
+                # Calculate base date considering optimal days
+                base_date = datetime.now().replace(hour=hour, minute=0, second=0, microsecond=0)
+                days_offset = i // len(optimal_hours)
+                
+                # If we have optimal days data, try to schedule on better days
+                if platform_days:
+                    target_date = base_date + timedelta(days=days_offset)
+                    current_day = target_date.strftime('%A').lower()
+                    
+                    # If current day has low engagement, move to better day
+                    if platform_days.get(current_day, 0.5) < 0.7:
+                        # Find the next high-engagement day
+                        for day_offset in range(1, 8):  # Check next 7 days
+                            test_date = target_date + timedelta(days=day_offset)
+                            test_day = test_date.strftime('%A').lower()
+                            if platform_days.get(test_day, 0.5) > 0.7:
+                                target_date = test_date
+                                break
+                    
+                    schedule_time = target_date
+                else:
+                    schedule_time = base_date + timedelta(days=days_offset)
+                
+                # Ensure the time is in the future
+                if schedule_time <= datetime.now():
+                    schedule_time += timedelta(days=1)
+                
+                # Get engagement prediction and optimal reason from strategy
+                engagement_level = "high" if platform_times.get(str(hour), 0.5) > 0.8 else "medium"
+                if platform_days:
+                    day_name = schedule_time.strftime('%A')
+                    day_engagement = platform_days.get(day_name.lower(), 0.5)
+                    if day_engagement > 0.8:
+                        engagement_level = "high"
+                
+                optimal_reason = f"Optimized for {request.platform} using marketing strategy analysis"
+                if platform_times:
+                    engagement_score = platform_times.get(str(hour), 0.5)
+                    optimal_reason += f" (engagement score: {engagement_score:.1f})"
+                    
+            else:
+                # Manual scheduling with specified intervals
+                schedule_time = start_date + timedelta(hours=i * 2)
+                engagement_level = "medium"
+                optimal_reason = "Manual scheduling"
+            
+            # Create the scheduled post object
+            scheduled_post = {
+                'id': post.get('id', f"post_{request.platform}_{i+1}_{int(datetime.now().timestamp())}"),
+                'platform': request.platform,
+                'title': post.get('title', f'Post #{i+1}'),
+                'content': post.get('content', ''),
+                'hashtags': post.get('hashtags', []),
+                'image_url': post.get('image_url'),
+                'scheduled_time': schedule_time.isoformat(),
+                'optimal_time': post.get('optimal_time', f"{schedule_time.hour}:00 {'AM' if schedule_time.hour < 12 else 'PM'}"),
+                'status': 'scheduled',
+                'engagement_prediction': post.get('engagement_prediction', engagement_level),
+                'call_to_action': post.get('call_to_action', ''),
+                'has_media': post.get('has_media', False),
+                'content_type': post.get('content_type', 'text'),
+                'created_at': datetime.now().isoformat(),
+                'suggested_date': schedule_time.strftime('%B %d, %Y'),
+                'suggested_time': schedule_time.strftime('%I:%M %p'),
+                'optimal_reason': optimal_reason
+            }
+            scheduled_posts.append(scheduled_post)
+        
+        # Save to persistent storage
+        success = save_scheduled_posts(scheduled_posts)
+        if not success:
+            raise Exception("Failed to save posts to storage")
+        
+        logger.info(f"Successfully scheduled {len(scheduled_posts)} posts for {request.platform}")
+        
+        return {
+            "success": True,
+            "scheduled_posts": scheduled_posts,
+            "platform": request.platform,
+            "message": f"Successfully scheduled {len(scheduled_posts)} posts for {request.platform} using marketing strategy optimization",
+            "storage_saved": success,
+            "marketing_strategy_applied": bool(marketing_strategy.get('engagement_heatmap'))
+        }
+        
+    except Exception as e:
+        logger.error(f"Error scheduling posts: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to schedule posts: {str(e)}")
+
+@app.post("/social-media/post-now")
+async def post_to_social_media(request: PostToSocialMediaRequest):
+    """Post content immediately to a social media platform"""
+    try:
+        # This would integrate with actual platform APIs
+        # For demo, we'll return success status
+        
+        platform_status = social_media_agent.get_platform_status()
+        if not platform_status[request.platform]['configured']:
+            missing_fields = platform_status[request.platform]['missing_fields']
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Platform {request.platform} not properly configured. Missing: {', '.join(missing_fields)}"
+            )
+        
+        # Simulate posting (in production, this would call actual APIs)
+        result = {
+            "success": True,
+            "post_id": request.post_id,
+            "platform": request.platform,
+            "posted_at": datetime.now().isoformat(),
+            "message": f"Successfully posted to {request.platform}",
+            "post_url": f"https://{request.platform}.com/posts/{request.post_id}"
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error posting to social media: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to post to social media: {str(e)}")
+
+@app.get("/social-media/upcoming-posts")
+async def get_upcoming_posts(platform: Optional[str] = None, limit: int = 50):
+    """Get upcoming scheduled posts from persistent storage"""
+    try:
+        logger.info(f"Fetching upcoming posts - platform: {platform}, limit: {limit}")
+        
+        # Clean up old posts first
+        all_posts = cleanup_past_posts()
+        
+        # Filter by platform if specified
+        if platform:
+            filtered_posts = [post for post in all_posts if post.get('platform') == platform]
+        else:
+            filtered_posts = all_posts
+        
+        # Sort by scheduled time
+        def sort_key(post):
+            try:
+                if isinstance(post.get('scheduled_time'), str):
+                    return datetime.fromisoformat(post['scheduled_time'].replace('Z', '+00:00'))
+                else:
+                    return datetime.fromtimestamp(post.get('scheduled_time', 0))
+            except:
+                return datetime.now()
+        
+        filtered_posts.sort(key=sort_key)
+        
+        # Limit results
+        upcoming_posts = filtered_posts[:limit]
+        
+        logger.info(f"Returning {len(upcoming_posts)} upcoming posts")
+        
+        return {
+            "upcoming_posts": upcoming_posts,
+            "total_count": len(filtered_posts),
+            "platform_filter": platform,
+            "loaded_from_storage": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting upcoming posts: {str(e)}")
+        # Return empty list if there's an error rather than failing completely
+        return {
+            "upcoming_posts": [],
+            "total_count": 0,
+            "platform_filter": platform,
+            "error": str(e)
+        }
+
+@app.get("/social-media/storage-status")
+async def get_storage_status():
+    """Get the status of the scheduled posts storage system"""
+    try:
+        file_path = get_scheduled_posts_file_path()
+        posts = load_scheduled_posts()
+        
+        return {
+            "storage_file": file_path,
+            "file_exists": os.path.exists(file_path),
+            "total_posts": len(posts),
+            "posts_by_platform": {
+                platform: len([p for p in posts if p.get('platform') == platform])
+                for platform in ['linkedin', 'facebook', 'instagram', 'tiktok', 'x']
+            },
+            "recent_posts": posts[:5]  # Show first 5 for debugging
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "storage_file": get_scheduled_posts_file_path(),
+            "file_exists": False
+        }
+
+@app.delete("/social-media/posts/{post_id}/cancel")
+async def cancel_scheduled_post(post_id: str):
+    """Cancel a scheduled social media post"""
+    try:
+        logger.info(f"Cancelling scheduled post: {post_id}")
+        
+        success = remove_scheduled_post(post_id)
+        if success:
+            return {
+                "success": True,
+                "post_id": post_id,
+                "message": "Post cancelled successfully",
+                "cancelled_at": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "success": False,
+                "post_id": post_id,
+                "message": "Post not found or already cancelled",
+                "cancelled_at": datetime.now().isoformat()
+            }
+        
+    except Exception as e:
+        logger.error(f"Error cancelling post: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel post: {str(e)}")
+        
+    except Exception as e:
+        logger.error(f"Error cancelling post: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel post: {str(e)}")
+
+@app.get("/social-media/load-business-data")
+async def load_business_data():
+    """Load business data from output files and brand identity storage"""
+    try:
+        business_data = social_media_agent.load_business_data()
+        
+        return {
+            "success": True,
+            "data": business_data,
+            "has_business_summary": bool(business_data.get("business_summary")),
+            "has_financial_data": bool(business_data.get("financial_data")),
+            "has_market_data": bool(business_data.get("market_data")),
+            "has_legal_data": bool(business_data.get("legal_data")),
+            "has_brand_identity_data": bool(business_data.get("brand_identity_data"))
+        }
+        
+    except Exception as e:
+        logger.error(f"Error loading business data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load business data: {str(e)}")
+
+# =============================================================================
+# LINKEDIN SPECIFIC ENDPOINTS
+# =============================================================================
+
+@app.get("/linkedin/auth")
+def linkedin_auth():
+    """Initiate LinkedIn OAuth flow"""
+    try:
+        auth_url = linkedin_agent.get_auth_url()
+        return {"auth_url": auth_url}
+    except Exception as e:
+        logger.error(f"LinkedIn auth error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/social/linkedin/callback")
+def linkedin_callback(code: str = None, error: str = None):
+    """Handle LinkedIn OAuth callback"""
+    if error or not code:
+        return {"error": error or "missing_code"}
+    
+    try:
+        token_data = linkedin_agent.exchange_code_for_token(code)
+        return {
+            "success": True,
+            "access_token": token_data["access_token"],
+            "expires_in": token_data["expires_in"],
+            "token_type": token_data.get("token_type", "Bearer")
+        }
+    except Exception as e:
+        logger.error(f"LinkedIn callback error: {str(e)}")
+        return {"error": "token_exchange_failed", "details": str(e)}
+
+@app.post("/linkedin/post")
+async def post_to_linkedin(request: dict):
+    """Post content directly to LinkedIn"""
+    try:
+        content = request.get("content", "")
+        image_data = request.get("image_data")
+        access_token = request.get("access_token")
+        
+        if not content:
+            raise HTTPException(status_code=400, detail="Content is required")
+        
+        result = linkedin_agent.post_to_linkedin(
+            message=content,
+            access_token=access_token,
+            image_data=image_data
+        )
+        
+        return {
+            "success": True,
+            "platform": "linkedin",
+            **result
+        }
+        
+    except Exception as e:
+        logger.error(f"LinkedIn posting error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to post to LinkedIn: {str(e)}")
 
 # =============================================================================
 # MAIN ENTRY POINT

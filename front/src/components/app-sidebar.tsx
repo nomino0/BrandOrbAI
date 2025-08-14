@@ -178,12 +178,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           }
         ],
       },
+
       {
-        title: "Pitch Deck",
-        url: "/dashboard/pitch-deck",
+        title: "Reach to Investors",
         icon: Presentation,
-        status: workflowStatus?.pitch_deck || "locked",
-        items: [],
+        status: workflowStatus?.marketing_strategy || "locked",
+        isExpandedByDefault: true,
+        items: [
+          {
+            title: "Contact",
+            url: "/dashboard/reach-to-market/online-presence",
+            status: workflowStatus?.marketing_strategy || "locked",
+          },
+          {
+            title: "Pitch Deck",
+            url: "/dashboard/reach-to-investors/pitch-deck",
+            status: workflowStatus?.marketing_strategy || "locked",
+          }
+        ],
       },
     ]
   }

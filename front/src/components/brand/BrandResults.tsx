@@ -23,8 +23,10 @@ import {
   ExternalLink,
   CheckCircle,
   AlertCircle,
-  Image
+  Image,
+  Sparkles
 } from 'lucide-react';
+import AIImageSwitcher from './AIImageSwitcher';
 
 interface BrandResultsProps {
   brandData: any;
@@ -53,7 +55,7 @@ const BrandResults: React.FC<BrandResultsProps> = ({ brandData, onEdit }) => {
   const [mockupRenders, setMockupRenders] = useState<MockupRender[]>([]);
   const [loadingStockImages, setLoadingStockImages] = useState(false);
   const [loadingMockups, setLoadingMockups] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'guidelines' | 'mockups' | 'assets' | 'variations'>('guidelines');
+  const [selectedTab, setSelectedTab] = useState<'guidelines' | 'mockups' | 'assets' | 'variations' | 'ai-images'>('guidelines');
 
   useEffect(() => {
     setMounted(true);
@@ -454,6 +456,22 @@ const BrandResults: React.FC<BrandResultsProps> = ({ brandData, onEdit }) => {
                 Brand Assets
               </div>
             </button>
+            <button
+              onClick={() => setSelectedTab('ai-images')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
+                selectedTab === 'ai-images'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-surface-muted hover:text-surface'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                AI Images
+                <Badge variant="secondary" className="bg-gradient-to-r from-primary/20 to-purple-500/20 text-primary text-xs px-2 py-0.5 rounded-full">
+                  New
+                </Badge>
+              </div>
+            </button>
           </nav>
         </div>
       </div>
@@ -504,6 +522,18 @@ const BrandResults: React.FC<BrandResultsProps> = ({ brandData, onEdit }) => {
             loadingStockImages={loadingStockImages}
             brandColors={brandColors}
             brandName={brandName}
+          />
+        )}
+
+        {selectedTab === 'ai-images' && (
+          <AIImageSwitcher
+            businessDescription={businessSummary}
+            brandName={brandName}
+            brandColors={brandColors}
+            onImageSelect={(imageUrl) => {
+              // Optional: handle image selection
+              console.log('AI image selected:', imageUrl);
+            }}
           />
         )}
       </div>

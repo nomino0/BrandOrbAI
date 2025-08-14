@@ -23,7 +23,7 @@ Instructions:
    - "What is the current stage of your business and what resources or constraints do you have?"
    - "What problem are you solving and how does your solution address this need?"
 
-4. Keep in mind that you can ask a maximum of FIVE questions in total. Try to gather the most important information in fewer questions.
+4. Keep in mind that you can ask a maximum of FIVE questions in total so make sure to ask about the place first. Try to gather the most important information in fewer questions.
 
 5. If you believe enough information has been gathered about these key areas to give helpful business advice, respond with: "NO_MORE_QUESTIONS_NEEDED"
 

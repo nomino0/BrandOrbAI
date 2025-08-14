@@ -1127,3 +1127,388 @@ export async function exportBrandGuidelines(request: BrandGuidelinesExportReques
 
   return response.json();
 }
+
+// =============================================
+// Marketing Strategy API Functions
+// =============================================
+
+export interface MarketingAnalysisRequest {
+  competitors: string[];
+  business_summary?: string;
+  brand_identity?: any;
+  viability_data?: any;
+}
+
+export interface MarketingAnalysisResponse {
+  analysis_id: string;
+  status: string;
+  linkedin_analysis?: {
+    session_id: string;
+    status: string;
+    companies: string[];
+    current_status?: any;
+  };
+  tiktok_analysis?: {
+    session_id: string;
+    status: string;
+    profiles: string[];
+    current_status?: any;
+  };
+  business_context: {
+    summary: string;
+    brand_identity: any;
+    viability: any;
+    market_analysis: string;
+    financial_assessment: string;
+    swot_analysis: any;
+    business_model: string;
+  };
+}
+
+export interface MarketingInsightsResponse {
+  analysis_id: string;
+  linkedin_insights?: {
+    insights: string;
+    rules?: any;
+    recommendations?: string[];
+  };
+  tiktok_insights?: {
+    insights: string;
+    rules?: any;
+    recommendations?: string[];
+  };
+  combined_strategy?: {
+    content_strategy: any;
+    timing_strategy: any;
+    engagement_tactics: any;
+    platform_specific: any;
+    business_alignment?: any;
+  };
+  posting_calendar?: any;
+  engagement_heatmap?: any;
+  overall_insights?: {
+    engagement_metrics?: {
+      average_engagement_rate?: string;
+      best_posting_times?: {
+        linkedin?: any;
+        tiktok?: any;
+      };
+    };
+    content_insights?: {
+      total_posts?: number;
+    };
+    strategic_recommendations?: any;
+    key_insights?: string[];
+  };
+}
+
+export interface TopPostsResponse {
+  success: boolean;
+  data: {
+    linkedin_posts: any[];
+    tiktok_posts: any[];
+  };
+  total_linkedin_posts: number;
+  total_tiktok_posts: number;
+}
+
+export interface AddCompetitorRequest {
+  url: string;
+  platform: 'linkedin' | 'tiktok';
+}
+
+// Start comprehensive marketing analysis
+export async function startMarketingAnalysis(request: MarketingAnalysisRequest): Promise<MarketingAnalysisResponse> {
+  const response = await fetch(`${BACKEND_URL}/marketing-strategy/comprehensive-analysis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to start marketing analysis: ${error}`);
+  }
+  
+  return response.json();
+}
+
+// Get marketing analysis status
+export async function getMarketingAnalysisStatus(analysisId: string): Promise<MarketingAnalysisResponse> {
+  const response = await fetch(`${BACKEND_URL}/marketing-strategy/analysis/${analysisId}/status`);
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get analysis status: ${error}`);
+  }
+  
+  return response.json();
+}
+
+// Get comprehensive marketing insights
+export async function getMarketingInsights(analysisId: string): Promise<MarketingInsightsResponse> {
+  const response = await fetch(`${BACKEND_URL}/marketing-strategy/analysis/${analysisId}/insights`);
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get marketing insights: ${error}`);
+  }
+  
+  return response.json();
+}
+
+// Get top engaging posts from competitors
+export async function getTopEngagingPosts(): Promise<TopPostsResponse> {
+  const response = await fetch(`${BACKEND_URL}/marketing-strategy/get-top-posts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get top posts: ${error}`);
+  }
+  
+  return response.json();
+}
+
+// Add new competitor for analysis
+export async function addCompetitor(request: AddCompetitorRequest): Promise<{ success: boolean; competitor: any; message: string }> {
+  const response = await fetch(`${BACKEND_URL}/marketing-strategy/add-competitor`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to add competitor: ${error}`);
+  }
+  
+  return response.json();
+}
+
+// =============================================================================
+// SOCIAL MEDIA MANAGEMENT API FUNCTIONS
+// =============================================================================
+
+export interface SocialMediaPostRequest {
+  business_summary: string;
+  marketing_insights: any;
+  platform: string;
+  count: number;
+  generate_images: boolean;
+  brand_identity?: {
+    name?: string;
+    colors?: string[];
+    personality?: string[];
+    customDescription?: string;
+    logoUrl?: string;
+  };
+  include_scheduling?: boolean;
+  staggered_loading?: boolean;
+}
+
+export interface SocialMediaPostResponse {
+  posts: any[];
+  scheduled_posts: any[];
+  generated_images: any;
+}
+
+export interface PlatformStatus {
+  [key: string]: {
+    configured: boolean;
+    missing_fields: string[];
+    configured_fields: string[];
+    total_fields: number;
+  };
+}
+
+// Generate social media posts
+export async function generateSocialMediaPosts(request: SocialMediaPostRequest): Promise<SocialMediaPostResponse> {
+  const response = await fetch(`${BACKEND_URL}/social-media/generate-posts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to generate social media posts: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// Get platform configuration status
+export async function getPlatformStatus(): Promise<{ platforms: PlatformStatus }> {
+  const response = await fetch(`${BACKEND_URL}/social-media/platforms/status`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get platform status: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// Get platform setup help
+export async function getPlatformHelp(platform: string): Promise<any> {
+  const response = await fetch(`${BACKEND_URL}/social-media/platforms/${platform}/help`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get platform help: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// Configure platform credentials
+export async function configurePlatform(platform: string, config: any): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${BACKEND_URL}/social-media/platforms/${platform}/configure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ config }),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to configure platform: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// Configure all platform credentials at once
+export async function configureAllPlatforms(configurations: Record<string, any>): Promise<{ success: boolean; message: string }> {
+  const results = [];
+  
+  for (const [platform, config] of Object.entries(configurations)) {
+    if (config && Object.keys(config).length > 0) {
+      try {
+        const result = await configurePlatform(platform, config);
+        results.push({ platform, ...result });
+      } catch (error) {
+        results.push({ platform, success: false, message: `Failed to configure ${platform}` });
+      }
+    }
+  }
+  
+  const allSuccessful = results.every(r => r.success);
+  return {
+    success: allSuccessful,
+    message: allSuccessful 
+      ? 'All platforms configured successfully' 
+      : `Some platforms failed: ${results.filter(r => !r.success).map(r => r.platform).join(', ')}`
+  };
+}
+
+// Schedule posts
+export async function schedulePosts(posts: any[], platform: string, scheduleType: string = 'optimal', startDate?: string): Promise<any> {
+  const response = await fetch(`${BACKEND_URL}/social-media/schedule-posts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      posts,
+      platform,
+      schedule_type: scheduleType,
+      start_date: startDate
+    }),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to schedule posts: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// Post immediately to social media
+export async function postToSocialMedia(postId: string, platform: string, immediate: boolean = true): Promise<any> {
+  const response = await fetch(`${BACKEND_URL}/social-media/post-now`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      post_id: postId,
+      platform,
+      immediate
+    }),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to post to social media: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// Get upcoming posts
+export async function getUpcomingPosts(platform?: string, limit: number = 10): Promise<any> {
+  const params = new URLSearchParams();
+  if (platform) params.append('platform', platform);
+  params.append('limit', limit.toString());
+  
+  const response = await fetch(`${BACKEND_URL}/social-media/upcoming-posts?${params}`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get upcoming posts: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// Load business data from output files and brand identity storage
+export async function loadBusinessData(): Promise<{ 
+  success: boolean; 
+  data: any; 
+  has_business_summary: boolean;
+  has_financial_data: boolean;
+  has_market_data: boolean;
+  has_legal_data: boolean;
+  has_brand_identity_data: boolean;
+}> {
+  const response = await fetch(`${BACKEND_URL}/social-media/load-business-data`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return await response.json();
+}
+
+// Cancel scheduled post
+export async function cancelScheduledPost(postId: string): Promise<any> {
+  const response = await fetch(`${BACKEND_URL}/social-media/posts/${postId}/cancel`, {
+    method: 'DELETE',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to cancel scheduled post: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+// LinkedIn specific functions
+export async function getLinkedInAuthUrl(): Promise<{ auth_url: string }> {
+  const response = await fetch(`${BACKEND_URL}/linkedin/auth`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get LinkedIn auth URL: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
+
+export async function postToLinkedIn(content: string, imageData?: string, accessToken?: string): Promise<any> {
+  const response = await fetch(`${BACKEND_URL}/linkedin/post`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content,
+      image_data: imageData,
+      access_token: accessToken
+    }),
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to post to LinkedIn: ${response.statusText}`);
+  }
+  
+  return response.json();
+}
