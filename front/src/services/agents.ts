@@ -1512,3 +1512,115 @@ export async function postToLinkedIn(content: string, imageData?: string, access
   
   return response.json();
 }
+
+// =============================================
+// INVESTOR RECOMMENDATION API FUNCTIONS
+// =============================================
+
+export interface InvestorRecommendation {
+  rank: number;
+  investor_name: string;
+  fund_name: string;
+  score: number;
+  explanation: string;
+  logo: string;
+  overview: string;
+  who_we_are?: string;
+  value_add?: string;
+  firm_type: string;
+  headquarters_address: string;
+  funding_requirements: string;
+  funding_stages: string[];
+  lead_investor?: string;
+  check_size: string;
+  target_countries: string[];
+  team_members: TeamMember[];
+  linkedin_link: string;
+  website_link: string;
+}
+
+export interface TeamMember {
+  name: string;
+  role: string;
+  bio?: string;
+}
+
+export interface InvestorAnalysisResponse {
+  success: boolean;
+  data: {
+    recommendations: InvestorRecommendation[];
+    readiness_score: number;
+    total_investors_analyzed: number;
+    top_matches: number;
+  };
+  message: string;
+}
+
+export interface InvestorRequest {
+  business_summary: string;
+}
+
+// Analyze business for investor recommendations
+export async function analyzeForInvestors(businessSummary: string): Promise<InvestorAnalysisResponse> {
+  if (!businessSummary.trim()) {
+    throw new Error('Business summary is required');
+  }
+
+  const response = await fetch(`${BACKEND_URL}/investors/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ business_summary: businessSummary }),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to analyze for investors');
+  }
+  
+  return response.json();
+}
+
+// Get saved investor recommendations
+export async function getInvestorRecommendations(): Promise<InvestorAnalysisResponse> {
+  const response = await fetch(`${BACKEND_URL}/investors/recommendations`);
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to get investor recommendations');
+  }
+  
+  return response.json();
+}
+
+// Get all available investors
+export async function getAllInvestors(): Promise<{ 
+  success: boolean; 
+  data: InvestorRecommendation[]; 
+  total: number;
+  message: string; 
+}> {
+  const response = await fetch(`${BACKEND_URL}/investors/all`);
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to get all investors');
+  }
+  
+  return response.json();
+}
+
+// Save investor analysis results
+export async function saveInvestorAnalysis(analysisData: any): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${BACKEND_URL}/investors/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(analysisData),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to save investor analysis');
+  }
+  
+  return response.json();
+}

@@ -187,7 +187,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items: [
           {
             title: "Contact",
-            url: "/dashboard/reach-to-market/online-presence",
+            url: "/dashboard/reach-to-investors/contact",
             status: workflowStatus?.marketing_strategy || "locked",
           },
           {

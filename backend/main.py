@@ -35,6 +35,7 @@ from agents.brand_identity_agent import BrandIdentityAgent, run_brand_identity_a
 from agents.brand_discovery_agent import BrandDiscoveryAgent, BrandDiscoverySession, run_brand_discovery_analysis
 from agents.brand_orchestrator import BrandOrchestrator, run_brand_orchestration
 from agents.identity_orchestrator import IdentityOrchestrator, run_comprehensive_brand_identity, run_comprehensive_brand_identity
+from agents.investor_agent import analyze_business_for_investors, get_investor_recommendations, load_investors, get_all_investors_for_table
 
 # Import ideation agents
 from agents.ideation_structs import State, QuestionEntry
@@ -2922,6 +2923,124 @@ async def download_file(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
 
 # =============================================================================
+# INVESTOR RECOMMENDATION ENDPOINTS
+# =============================================================================
+
+class InvestorAnalysisRequest(BaseModel):
+    business_summary: str
+
+class InvestorAnalysisResponse(BaseModel):
+    success: bool
+    data: Dict[str, Any]
+    message: str = ""
+
+@app.post("/investors/analyze", response_model=InvestorAnalysisResponse)
+async def analyze_for_investors_endpoint(request: InvestorAnalysisRequest):
+    """
+    Analyze business for investor recommendations.
+    """
+    try:
+        logger.info(f"🔍 Analyzing business for investors: {request.business_summary[:100]}...")
+        
+        result = analyze_business_for_investors(request.business_summary)
+        
+        logger.info(f"✅ Investor analysis completed with {len(result.get('recommendations', []))} matches")
+        
+        return InvestorAnalysisResponse(
+            success=True,
+            data=result,
+            message=f"Found {len(result.get('recommendations', []))} top investor matches"
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error in investor analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze for investors: {e}")
+
+@app.get("/investors/recommendations", response_model=InvestorAnalysisResponse)
+async def get_investor_recommendations_endpoint():
+    """
+    Get existing investor recommendations from output file.
+    """
+    try:
+        # Try to read from output file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        output_file = os.path.join(current_dir, "output", "investor_analysis_output.json")
+        
+        if os.path.exists(output_file):
+            with open(output_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            # Extract the data we need
+            result = {
+                "recommendations": data.get("investor_recommendations", []),
+                "readiness_score": data.get("investment_readiness_score", 0.7),
+                "total_investors_analyzed": data.get("total_investors_analyzed", 6089)
+            }
+            
+            return InvestorAnalysisResponse(
+                success=True,
+                data=result,
+                message=f"Retrieved {len(result['recommendations'])} existing recommendations"
+            )
+        else:
+            return InvestorAnalysisResponse(
+                success=False,
+                data={"recommendations": [], "readiness_score": 0, "total_investors_analyzed": 0},
+                message="No existing analysis found"
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Error getting investor recommendations: {e}")
+        return InvestorAnalysisResponse(
+            success=False,
+            data={"recommendations": [], "readiness_score": 0, "total_investors_analyzed": 0},
+            message=f"Failed to get recommendations: {e}"
+        )
+
+@app.get("/investors/all")
+async def get_all_investors_endpoint():
+    """
+    Get all investors for table display.
+    """
+    try:
+        logger.info("📊 Getting all investors for table display")
+        
+        investors = get_all_investors_for_table()
+        
+        logger.info(f"✅ Retrieved {len(investors)} investors for table")
+        
+        return {
+            "success": True,
+            "data": investors,
+            "total": len(investors),
+            "message": f"Retrieved {len(investors)} investors"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting all investors: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get investors: {e}")
+
+@app.post("/investors/save")
+async def save_investor_analysis_endpoint(data: Dict[str, Any]):
+    """
+    Save investor analysis to files.
+    """
+    try:
+        from agents.investor_agent import save_investor_analysis_to_file
+        
+        result = save_investor_analysis_to_file(data, data.get("business_summary", ""))
+        
+        return {
+            "success": result.get("success", False),
+            "message": "Analysis saved successfully" if result.get("success") else "Failed to save analysis",
+            "files": result.get("files_created", [])
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving investor analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save analysis: {e}")
+
+# =============================================================================
 # SOCIAL MEDIA ANALYSIS ENDPOINTS
 # =============================================================================
 
@@ -4722,6 +4841,103 @@ async def post_to_linkedin(request: dict):
     except Exception as e:
         logger.error(f"LinkedIn posting error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to post to LinkedIn: {str(e)}")
+
+# =============================================================================
+# INVESTOR RECOMMENDATION ENDPOINTS
+# =============================================================================
+
+class InvestorRequest(BaseModel):
+    business_summary: str
+
+@app.post("/investors/analyze")
+async def analyze_for_investors(request: InvestorRequest):
+    """
+    Analyze business summary and get investor recommendations
+    """
+    try:
+        if not request.business_summary:
+            raise HTTPException(status_code=400, detail="Business summary is required")
+        
+        result = analyze_business_for_investors(request.business_summary)
+        
+        return {
+            "success": True,
+            "data": result,
+            "message": f"Found {len(result['recommendations'])} investor recommendations"
+        }
+        
+    except Exception as e:
+        logger.error(f"Investor analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze for investors: {str(e)}")
+
+@app.get("/investors/recommendations")
+async def get_investor_recommendations_endpoint():
+    """
+    Get saved investor recommendations
+    """
+    try:
+        # Try to load from file or return empty if not found
+        output_file = os.path.join(output_dir, "investor_recommendations.json")
+        
+        if os.path.exists(output_file):
+            with open(output_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return {
+                    "success": True,
+                    "data": data,
+                    "message": "Investor recommendations loaded successfully"
+                }
+        else:
+            return {
+                "success": False,
+                "data": {"recommendations": [], "readiness_score": 0.0},
+                "message": "No investor recommendations found. Please analyze your business first."
+            }
+            
+    except Exception as e:
+        logger.error(f"Error loading investor recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load investor recommendations: {str(e)}")
+
+@app.get("/investors/all")
+async def get_all_investors():
+    """
+    Get all available investors in the database
+    """
+    try:
+        investors_data = load_investors()
+        
+        return {
+            "success": True,
+            "data": {
+                "investors": investors_data,
+                "total": len(investors_data)
+            },
+            "message": f"Loaded {len(investors_data)} investors"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error loading investors: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load investors: {str(e)}")
+
+@app.post("/investors/save")
+async def save_investor_analysis(request: dict):
+    """
+    Save investor analysis results to file
+    """
+    try:
+        output_file = os.path.join(output_dir, "investor_recommendations.json")
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(request, f, ensure_ascii=False, indent=2)
+        
+        return {
+            "success": True,
+            "message": "Investor analysis saved successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error saving investor analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save investor analysis: {str(e)}")
 
 # =============================================================================
 # MAIN ENTRY POINT
