@@ -18,7 +18,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, FileResponse
+from fastapi.responses import PlainTextResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -55,6 +55,7 @@ from agents.identity.vectorization_api import vectorization_router
 # Import social media agents  
 from agents.social_media_agent import SocialMediaAgent, social_media_agent
 from agents.linkedin_agent import LinkedInAgent, linkedin_agent
+from agents.website_generator_agent import WebsiteGeneratorAgent
 from pathlib import Path
 
 # Configure logging
@@ -115,6 +116,9 @@ async def log_requests(request: Request, call_next):
 runs = {}  # For multi-agent runs
 sessions = {}  # For ideation sessions
 brand_identity_storage = {}  # For brand identity results
+
+# Initialize website generator agent
+website_generator_agent = WebsiteGeneratorAgent()
 brand_discovery_sessions = {}  # For brand discovery sessions
 
 # =============================================================================
@@ -510,6 +514,32 @@ class PostToSocialMediaRequest(BaseModel):
     content: Optional[str] = None
     image_data: Optional[str] = None
     title: Optional[str] = None
+
+# Website Generator Models
+class WebsiteGenerationRequest(BaseModel):
+    user_prompt: Optional[str] = ""
+    style_preferences: Optional[str] = "modern"
+    regenerate: Optional[bool] = False
+    website_id: Optional[str] = None
+
+class WebsiteRegenerationRequest(BaseModel):
+    website_id: str
+    user_feedback: str
+    style_preferences: Optional[str] = "modern"
+
+class WebsiteResponse(BaseModel):
+    success: bool
+    message: str
+    website_id: Optional[str] = None
+    html_code: Optional[str] = None
+    analysis: Optional[dict] = None
+    version_info: Optional[dict] = None
+    company_name: Optional[str] = None
+    generation_time: Optional[str] = None
+    error: Optional[str] = None
+
+class PublishWebsiteRequest(BaseModel):
+    version_id: str
 
 # =============================================================================
 # MULTI-AGENT ENDPOINTS
@@ -5284,6 +5314,334 @@ async def linkedin_debug():
         }
     except Exception as e:
         return {"error": str(e)}
+
+# =============================================================================
+# WEBSITE GENERATOR ENDPOINTS
+# =============================================================================
+
+@app.get("/website-generator/business-data")
+async def get_business_data_for_website():
+    """
+    Load business data for website generation
+    """
+    try:
+        business_data = website_generator_agent.load_business_data()
+        
+        return {
+            "success": True,
+            "data": business_data,
+            "has_business_summary": bool(business_data.get("business_summary")),
+            "has_financial_data": bool(business_data.get("financial_data")),
+            "has_market_data": bool(business_data.get("market_data")),
+            "has_legal_data": bool(business_data.get("legal_data")),
+            "has_brand_identity_data": bool(business_data.get("brand_identity_data")),
+            "message": "Business data loaded successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error loading business data for website: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load business data: {str(e)}")
+
+@app.post("/website-generator/generate", response_model=WebsiteResponse)
+async def generate_website(request: WebsiteGenerationRequest):
+    """
+    Generate a professional website/landing page based on business data
+    
+    **Request Body:**
+    - user_prompt: Optional user requirements and customizations
+    - style_preferences: Design style preference (modern, professional, creative, etc.)
+    - regenerate: Whether this is a regeneration of existing website
+    - website_id: ID for regeneration (optional)
+    
+    **Response:**
+    - Complete HTML code with embedded CSS/JS
+    - Business analysis used for generation
+    - Website ID for future reference
+    - Version information
+    """
+    try:
+        # Load business data
+        business_data = website_generator_agent.load_business_data()
+        
+        if not any(business_data.values()):
+            return WebsiteResponse(
+                success=False,
+                message="No business data available. Please complete business analysis first.",
+                error="Business data not found"
+            )
+        
+        # Generate website
+        result = website_generator_agent.generate_website(
+            business_data=business_data,
+            user_prompt=request.user_prompt or "",
+            style_preferences=request.style_preferences or "modern"
+        )
+        
+        if result["success"]:
+            return WebsiteResponse(
+                success=True,
+                message="Website generated successfully! 🎉",
+                website_id=result["website_id"],
+                html_code=result["html_code"],
+                analysis=result["analysis"],
+                version_info=result["version_info"],
+                company_name=result["company_name"],
+                generation_time=result["generation_time"]
+            )
+        else:
+            return WebsiteResponse(
+                success=False,
+                message="Website generation failed",
+                error="Generation failed"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error generating website: {str(e)}")
+        return WebsiteResponse(
+            success=False,
+            message="Server error occurred during website generation",
+            error=str(e)
+        )
+
+@app.post("/website-generator/regenerate", response_model=WebsiteResponse)
+async def regenerate_website(request: WebsiteRegenerationRequest):
+    """
+    Regenerate website with user feedback
+    
+    **Request Body:**
+    - website_id: ID of website to regenerate
+    - user_feedback: User feedback and requested changes
+    - style_preferences: Updated style preferences
+    
+    **Response:**
+    - Updated website with incorporated feedback
+    """
+    try:
+        result = website_generator_agent.regenerate_website(
+            website_id=request.website_id,
+            user_feedback=request.user_feedback,
+            style_preferences=request.style_preferences or "modern"
+        )
+        
+        if result["success"]:
+            return WebsiteResponse(
+                success=True,
+                message="Website regenerated successfully with your feedback! ✨",
+                website_id=result["website_id"],
+                html_code=result["html_code"],
+                analysis=result["analysis"],
+                version_info=result["version_info"],
+                company_name=result["company_name"],
+                generation_time=result["generation_time"]
+            )
+        else:
+            return WebsiteResponse(
+                success=False,
+                message="Website regeneration failed",
+                error="Regeneration failed"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error regenerating website: {str(e)}")
+        return WebsiteResponse(
+            success=False,
+            message="Server error occurred during website regeneration",
+            error=str(e)
+        )
+
+@app.get("/website-generator/versions/{website_id}")
+async def get_website_versions(website_id: str):
+    """
+    Get all versions of a website
+    
+    **Path Parameters:**
+    - website_id: Website identifier
+    
+    **Response:**
+    - List of all versions with metadata
+    """
+    try:
+        versions = website_generator_agent.get_website_versions(website_id)
+        
+        return {
+            "success": True,
+            "website_id": website_id,
+            "versions": versions,
+            "total_versions": len(versions),
+            "message": f"Found {len(versions)} versions"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting website versions: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get website versions: {str(e)}")
+
+@app.get("/website-generator/version/{version_id}/html")
+async def get_website_html(version_id: str):
+    """
+    Get HTML content for a specific website version
+    
+    **Path Parameters:**
+    - version_id: Version identifier
+    
+    **Response:**
+    - HTML content of the website version
+    """
+    try:
+        html_content = website_generator_agent.get_website_html(version_id)
+        
+        if html_content:
+            return {
+                "success": True,
+                "version_id": version_id,
+                "html_code": html_content,
+                "message": "HTML content retrieved successfully"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Website version not found")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting website HTML: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get website HTML: {str(e)}")
+
+@app.get("/website-generator/version/{version_id}/metadata")
+async def get_website_metadata(version_id: str):
+    """
+    Get metadata for a specific website version
+    
+    **Path Parameters:**
+    - version_id: Version identifier
+    
+    **Response:**
+    - Metadata including analysis data for TSX components
+    """
+    try:
+        # Load metadata from file
+        metadata_file = Path("website_versions") / f"{version_id}_metadata.json"
+        
+        if metadata_file.exists():
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+            
+            return {
+                "success": True,
+                "version_id": version_id,
+                "metadata": metadata,
+                "message": "Metadata retrieved successfully"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Version metadata not found")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting website metadata: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get website metadata: {str(e)}")
+
+@app.post("/website-generator/publish")
+async def publish_website(request: PublishWebsiteRequest):
+    """
+    Publish a website version
+    
+    **Request Body:**
+    - version_id: Version to publish
+    
+    **Response:**
+    - Publication confirmation and URL
+    """
+    try:
+        result = website_generator_agent.publish_website(request.version_id)
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": "Website published successfully! 🚀",
+                "published_url": result["published_url"],
+                "version_id": result["version_id"]
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to publish website",
+                "error": result.get("error", "Unknown error")
+            }
+            
+    except Exception as e:
+        logger.error(f"Error publishing website: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to publish website: {str(e)}")
+
+@app.get("/company-profile/{website_id}")
+async def serve_published_website(website_id: str):
+    """
+    Serve published website at custom URL
+    
+    **Path Parameters:**
+    - website_id: Published website identifier
+    
+    **Response:**
+    - HTML page of the published website
+    """
+    try:
+        # Check if it's a version_id or website_id
+        html_content = website_generator_agent.get_website_html(website_id)
+        
+        if not html_content:
+            # Try to find in published directory
+            published_dir = Path("generated_websites/published")
+            html_file = published_dir / f"{website_id}.html"
+            
+            if html_file.exists():
+                with open(html_file, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+        
+        if html_content:
+            return HTMLResponse(content=html_content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Published website not found")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving published website: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to serve website: {str(e)}")
+
+@app.get("/website-generator/analyze")
+async def analyze_business_for_website():
+    """
+    Analyze business data for website requirements
+    
+    **Response:**
+    - Business analysis with website-specific insights
+    """
+    try:
+        business_data = website_generator_agent.load_business_data()
+        
+        if not any(business_data.values()):
+            return {
+                "success": False,
+                "message": "No business data available for analysis",
+                "analysis": {}
+            }
+        
+        analysis = website_generator_agent.analyze_business_for_website(business_data)
+        
+        return {
+            "success": True,
+            "message": "Business analysis completed successfully",
+            "analysis": analysis,
+            "data_sources": {
+                "has_business_summary": bool(business_data.get("business_summary")),
+                "has_financial_data": bool(business_data.get("financial_data")),
+                "has_market_data": bool(business_data.get("market_data")),
+                "has_legal_data": bool(business_data.get("legal_data")),
+                "has_brand_identity": bool(business_data.get("brand_identity_data"))
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing business for website: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze business: {str(e)}")
 
 # =============================================================================
 # MAIN ENTRY POINT
