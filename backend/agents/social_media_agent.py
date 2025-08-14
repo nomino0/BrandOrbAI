@@ -638,6 +638,7 @@ class SocialMediaAgent:
 
     def get_platform_status(self) -> Dict[str, Dict]:
         """Check the configuration status of all platforms"""
+        import os
         status = {}
         
         for platform, config in self.platform_configs.items():
@@ -650,12 +651,31 @@ class SocialMediaAgent:
             }
             
             platform_fields = required_fields.get(platform, [])
-            # Check if field has a non-empty value (not None, empty string, or whitespace)
-            configured_fields = [field for field in platform_fields if config.get(field) and str(config.get(field)).strip()]
+            configured_fields = []
+            missing_fields = []
+            
+            # Special handling for LinkedIn - check environment variables
+            if platform == 'linkedin':
+                linkedin_env_mapping = {
+                    'client_id': 'LINKEDIN_CLIENT_ID',
+                    'client_secret': 'LINKEDIN_CLIENT_SECRET', 
+                    'access_token': 'LINKEDIN_ACCESS_TOKEN'
+                }
+                
+                for field in platform_fields:
+                    env_var = linkedin_env_mapping.get(field)
+                    if env_var and os.getenv(env_var) and str(os.getenv(env_var)).strip():
+                        configured_fields.append(field)
+                    else:
+                        missing_fields.append(field)
+            else:
+                # For other platforms, use config as before
+                configured_fields = [field for field in platform_fields if config.get(field) and str(config.get(field)).strip()]
+                missing_fields = [field for field in platform_fields if not (config.get(field) and str(config.get(field)).strip())]
             
             status[platform] = {
                 'configured': len(configured_fields) == len(platform_fields),
-                'missing_fields': [field for field in platform_fields if not (config.get(field) and str(config.get(field)).strip())],
+                'missing_fields': missing_fields,
                 'configured_fields': configured_fields,
                 'total_fields': len(platform_fields)
             }

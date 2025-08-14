@@ -85,6 +85,7 @@ interface SocialMediaPost {
   engagement_prediction: 'low' | 'medium' | 'high'
   call_to_action: string
   image_url?: string
+  image_data?: string // Base64 encoded image data for backend
   scheduled_time?: string
   status?: 'draft' | 'scheduled' | 'published'
   has_media?: boolean
@@ -462,9 +463,26 @@ export default function OnlinePresencePage() {
       if (response.ok && response.headers.get('content-length') !== '0') {
         const imageBlob = await response.blob()
         if (imageBlob.size > 1000) {
+          // Create both blob URL and base64 data
           const imageUrl = URL.createObjectURL(imageBlob)
+          
+          // Convert to base64 for backend storage
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const result = reader.result as string
+              // Return just the base64 part (remove data:image/...;base64,)
+              resolve(result.split(',')[1])
+            }
+            reader.onerror = reject
+            reader.readAsDataURL(imageBlob)
+          })
+          
           console.log('✅ Media generated successfully for', platformNames[platform])
-          return imageUrl
+          return {
+            imageUrl,
+            base64Data
+          }
         }
       }
       
@@ -572,17 +590,18 @@ export default function OnlinePresencePage() {
           if (generateImages && !post.image_url && !post.has_media) {
             console.log('🎨 Generating media for post...')
             const brandColors = brandIdentityData?.colors || []
-            const mediaUrl = await generateMediaForPost(
+            const mediaResult = await generateMediaForPost(
               post.content, 
               post.platform, 
               businessSummary || businessData.business_summary,
               brandColors
             )
             
-            if (mediaUrl) {
+            if (mediaResult) {
               post = {
                 ...post,
-                image_url: mediaUrl,
+                image_url: mediaResult.imageUrl,
+                image_data: mediaResult.base64Data,
                 has_media: true,
                 content_type: 'image'
               }
@@ -793,12 +812,15 @@ export default function OnlinePresencePage() {
         // Generate AI media based on content/keywords
         toast.info('🎨 Generating visual content for your post...')
         const contentForMedia = customPostContent || `Create visual for: ${customPostKeywords}`
-        mediaUrl = await generateMediaForPost(
+        const mediaResult = await generateMediaForPost(
           contentForMedia,
           customPostPlatform,
           businessSummary || businessData.business_summary || 'Professional business content'
         )
-        hasMedia = !!mediaUrl
+        if (mediaResult) {
+          mediaUrl = mediaResult.imageUrl
+          hasMedia = true
+        }
       }
 
       const customPost: SocialMediaPost = {
@@ -812,6 +834,7 @@ export default function OnlinePresencePage() {
         engagement_prediction: hasMedia ? 'high' : 'medium',
         call_to_action: 'Engage with us!',
         image_url: mediaUrl || undefined,
+        image_data: mediaResult?.base64Data,
         has_media: hasMedia,
         status: 'draft'
       }
@@ -904,6 +927,34 @@ export default function OnlinePresencePage() {
     return keys.filter(key => settings[key] && settings[key].toString().trim()).length
   }
 
+  // Helper function to convert image URL to base64
+  const convertImageToBase64 = async (imageUrl: string): Promise<string | null> => {
+    try {
+      // If it's already a base64 string, return it
+      if (imageUrl.startsWith('data:')) {
+        return imageUrl.split(',')[1] // Return just the base64 part
+      }
+      
+      // If it's a blob URL, convert it
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          // Return just the base64 part (remove data:image/...;base64,)
+          resolve(result.split(',')[1])
+        }
+        reader.onerror = () => resolve(null)
+        reader.readAsDataURL(blob)
+      })
+    } catch (error) {
+      console.error('Error converting image to base64:', error)
+      return null
+    }
+  }
+
   const getTotalFieldsCount = (platform: string): number => {
     const fieldCounts: { [key: string]: number } = {
       linkedin: 3, // client_id, client_secret, access_token
@@ -918,8 +969,31 @@ export default function OnlinePresencePage() {
   const schedulePost = async (post: SocialMediaPost, immediate = false, skipRefresh = false) => {
     try {
       if (immediate) {
-        const result = await postToSocialMedia(post.id, post.platform, true)
-        toast.success(`Posted to ${post.platform} immediately!`)
+        // Convert image URL to base64 if needed
+        let imageData = post.image_data
+        if (!imageData && post.image_url && post.has_media) {
+          console.log('Converting image URL to base64 for posting...')
+          const convertedImage = await convertImageToBase64(post.image_url)
+          imageData = convertedImage || undefined
+          if (!imageData) {
+            console.warn('Failed to convert image to base64, posting without image')
+          }
+        }
+        
+        const result = await postToSocialMedia(
+          post.id, 
+          post.platform, 
+          true,
+          post.content,
+          imageData,
+          post.title
+        )
+        
+        // Show detailed success message
+        const platformName = post.platform.charAt(0).toUpperCase() + post.platform.slice(1)
+        toast.success(`Successfully posted to ${platformName}! 🎉`)
+        console.log('Immediate post result:', result)
+        
       } else {
         console.log(`Scheduling post ${post.id} for platform ${post.platform}`) // Debug log
         const result = await schedulePosts([post], post.platform, 'optimal')
@@ -951,9 +1025,27 @@ export default function OnlinePresencePage() {
       if (!skipRefresh) {
         setTimeout(() => loadUpcomingPosts(), 500)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error ${immediate ? 'posting' : 'scheduling'} post:`, error)
-      toast.error(`Failed to ${immediate ? 'post' : 'schedule'} to ${post.platform}. Please check platform configuration.`)
+      
+      // Provide detailed error messages based on error type
+      let errorMessage = `Failed to ${immediate ? 'post' : 'schedule'} to ${post.platform}`
+      
+      if (error.message?.includes('LinkedIn access token is invalid')) {
+        errorMessage = 'LinkedIn authentication expired. Please reconnect your account.'
+      } else if (error.message?.includes('400')) {
+        errorMessage = 'Invalid post content. Please check your post and try again.'
+      } else if (error.message?.includes('500')) {
+        errorMessage = 'Server error occurred. Please try again in a moment.'
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.'
+      } else if (error.message) {
+        errorMessage += `: ${error.message}`
+      } else {
+        errorMessage += '. Please check platform configuration.'
+      }
+      
+      toast.error(errorMessage)
       throw error // Re-throw to allow Promise.all to catch it
     }
   }
@@ -1772,7 +1864,19 @@ export default function OnlinePresencePage() {
             {/* Post Management Modal */}
             {showPostModal && selectedPost && (
               <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                <div className="bg-white/98 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200/50">
+                <div className="bg-white/98 backdrop-blur-lg rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-200/50 relative">
+                  {/* Loading Overlay */}
+                  {postModalLoading && (
+                    <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] rounded-2xl z-10 flex items-center justify-center">
+                      <div className="bg-white rounded-xl shadow-lg p-6 flex items-center gap-3">
+                        <Loader2 className="h-6 w-6 animate-spin text-green-600" />
+                        <span className="text-gray-700 font-medium">
+                          Posting to {selectedPost?.platform?.charAt(0).toUpperCase() + selectedPost?.platform?.slice(1)}...
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="p-6">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
@@ -1795,7 +1899,8 @@ export default function OnlinePresencePage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => setShowPostModal(false)}
-                        className="h-10 w-10 p-0 rounded-full border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
+                        disabled={postModalLoading}
+                        className="h-10 w-10 p-0 rounded-full border-gray-200 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -1918,6 +2023,40 @@ export default function OnlinePresencePage() {
                           />
                         </div>
                       </div>
+
+                      {/* Post Now Button */}
+                      <Button
+                        onClick={async () => {
+                          if (selectedPost) {
+                            setPostModalLoading(true)
+                            try {
+                              await schedulePost(selectedPost, true)
+                              // Only close modal on successful posting
+                              setShowPostModal(false)
+                            } catch (error) {
+                              // Error is already handled in schedulePost function
+                              // Keep modal open so user can try again
+                              console.error('Error in Post Now:', error)
+                            } finally {
+                              setPostModalLoading(false)
+                            }
+                          }
+                        }}
+                        disabled={postModalLoading}
+                        className="w-full h-12 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600 text-white font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                      >
+                        {postModalLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Posting to {selectedPost?.platform?.charAt(0).toUpperCase() + selectedPost?.platform?.slice(1)}...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4 mr-2" />
+                            Post Now
+                          </>
+                        )}
+                      </Button>
 
                       {/* Delete Post Alert Dialog */}
                       <AlertDialog>

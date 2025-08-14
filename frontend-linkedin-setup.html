@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Integration Setup - BrandOrbAI</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0077b5;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .status-card {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid;
+        }
+        .status-success {
+            background-color: #f0f9f4;
+            border-color: #10b981;
+            color: #065f46;
+        }
+        .status-error {
+            background-color: #fef2f2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+        .status-warning {
+            background-color: #fefbf2;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+        button {
+            background: #0077b5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background: #005885;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .steps {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .step {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0077b5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 LinkedIn Integration Setup</h1>
+        
+        <div id="status-container"></div>
+        
+        <div id="auth-section" style="display: none;">
+            <h2>Step 1: Authorize LinkedIn Access</h2>
+            <p>Click the button below to authorize BrandOrbAI to post on your behalf:</p>
+            <button onclick="startLinkedInAuth()">🚀 Authorize LinkedIn</button>
+        </div>
+
+        <div class="steps">
+            <h3>🛠️ One-time Setup Instructions:</h3>
+            <div class="step">1. ✅ Make sure your backend server is running on port 8001</div>
+            <div class="step">2. ✅ Your LinkedIn App credentials are configured in .env</div>
+            <div class="step">3. 🔄 Click "Check Status" to verify your current setup</div>
+            <div class="step">4. 🔗 If needed, click "Authorize LinkedIn" to get a fresh token</div>
+            <div class="step">5. 🎉 Start posting to LinkedIn from your app!</div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button onclick="checkStatus()">🔍 Check Status</button>
+            <button onclick="testPost()" id="test-btn" disabled>📝 Test Post</button>
+        </div>
+
+        <div id="test-section" style="display: none; margin-top: 20px;">
+            <h3>Test LinkedIn Posting</h3>
+            <textarea id="test-content" placeholder="Enter test post content..." style="width: 100%; height: 100px; padding: 10px; border-radius: 6px; border: 1px solid #ddd;"></textarea>
+            <button onclick="sendTestPost()" style="margin-top: 10px;">Send Test Post</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8001';
+
+        async function checkStatus() {
+            showLoading('Checking LinkedIn integration status...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/linkedin/status`);
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    showStatus('success', `✅ LinkedIn Connected! Person ID: ${data.person_id}`);
+                    document.getElementById('test-btn').disabled = false;
+                    document.getElementById('test-section').style.display = 'block';
+                } else if (data.setup_required) {
+                    showStatus('warning', '⚠️ LinkedIn integration not set up. Click "Authorize LinkedIn" below.');
+                    document.getElementById('auth-section').style.display = 'block';
+                } else if (data.refresh_required) {
+                    showStatus('error', '❌ LinkedIn token expired or invalid. Please re-authorize.');
+                    document.getElementById('auth-section').style.display = 'block';
+                }
+                
+            } catch (error) {
+                showStatus('error', `❌ Error checking status: ${error.message}. Make sure your backend is running on port 8001.`);
+            }
+        }
+
+        async function startLinkedInAuth() {
+            try {
+                showLoading('Getting authorization URL...');
+                
+                const response = await fetch(`${API_BASE}/linkedin/auth`);
+                const data = await response.json();
+                
+                if (data.success && data.auth_url) {
+                    showStatus('warning', '🔄 Opening LinkedIn authorization page...');
+                    window.open(data.auth_url, '_blank');
+                    
+                    // Start polling for completion
+                    pollForAuthCompletion();
+                } else {
+                    showStatus('error', '❌ Failed to get authorization URL');
+                }
+                
+            } catch (error) {
+                showStatus('error', `❌ Error starting auth: ${error.message}`);
+            }
+        }
+
+        function pollForAuthCompletion() {
+            let attempts = 0;
+            const maxAttempts = 30; // 5 minutes
+            
+            const interval = setInterval(async () => {
+                attempts++;
+                
+                try {
+                    const response = await fetch(`${API_BASE}/linkedin/status`);
+                    const data = await response.json();
+                    
+                    if (data.authenticated) {
+                        clearInterval(interval);
+                        showStatus('success', '🎉 LinkedIn authorization successful!');
+                        document.getElementById('test-btn').disabled = false;
+                        document.getElementById('test-section').style.display = 'block';
+                        document.getElementById('auth-section').style.display = 'none';
+                        return;
+                    }
+                    
+                    if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        showStatus('warning', '⏰ Authorization timeout. Please try again or check if you completed the authorization.');
+                    } else {
+                        showStatus('warning', `🔄 Waiting for authorization... (${Math.round((maxAttempts - attempts) * 10 / 60)} minutes remaining)`);
+                    }
+                    
+                } catch (error) {
+                    console.log('Polling error:', error);
+                }
+            }, 10000); // Check every 10 seconds
+        }
+
+        async function testPost() {
+            document.getElementById('test-section').style.display = 'block';
+            document.getElementById('test-content').value = 'Test post from BrandOrbAI LinkedIn integration! 🚀 #BrandOrbAI #Test';
+        }
+
+        async function sendTestPost() {
+            const content = document.getElementById('test-content').value.trim();
+            if (!content) {
+                alert('Please enter some content for the test post');
+                return;
+            }
+
+            showLoading('Posting to LinkedIn...');
+
+            try {
+                const response = await fetch(`${API_BASE}/social-media/post-now`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        platform: 'linkedin',
+                        immediate: true,
+                        content: content,
+                        title: 'Test Post'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showStatus('success', '🎉 Test post sent successfully to LinkedIn!');
+                } else {
+                    showStatus('error', `❌ Failed to post: ${data.message || 'Unknown error'}`);
+                }
+
+            } catch (error) {
+                showStatus('error', `❌ Error sending post: ${error.message}`);
+            }
+        }
+
+        function showStatus(type, message) {
+            const container = document.getElementById('status-container');
+            container.innerHTML = `<div class="status-card status-${type}">${message}</div>`;
+        }
+
+        function showLoading(message) {
+            const container = document.getElementById('status-container');
+            container.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Check status on page load
+        window.addEventListener('load', checkStatus);
+    </script>
+</body>
+</html>

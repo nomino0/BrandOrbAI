@@ -1421,15 +1421,28 @@ export async function schedulePosts(posts: any[], platform: string, scheduleType
 }
 
 // Post immediately to social media
-export async function postToSocialMedia(postId: string, platform: string, immediate: boolean = true): Promise<any> {
+export async function postToSocialMedia(postId: string, platform: string, immediate: boolean = true, content?: string, imageData?: string, title?: string): Promise<any> {
+  const requestBody: any = {
+    post_id: postId,
+    platform,
+    immediate
+  };
+  
+  // Include content and image data if provided (for posts not yet scheduled)
+  if (content) {
+    requestBody.content = content;
+  }
+  if (imageData) {
+    requestBody.image_data = imageData;
+  }
+  if (title) {
+    requestBody.title = title;
+  }
+  
   const response = await fetch(`${BACKEND_URL}/social-media/post-now`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      post_id: postId,
-      platform,
-      immediate
-    }),
+    body: JSON.stringify(requestBody),
   });
   
   if (!response.ok) {

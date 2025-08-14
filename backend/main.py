@@ -506,6 +506,10 @@ class PostToSocialMediaRequest(BaseModel):
     schedule_time: Optional[int] = None
     immediate: bool = False
     posting_schedule: Optional[dict] = None
+    # Optional content for posts not yet saved to storage
+    content: Optional[str] = None
+    image_data: Optional[str] = None
+    title: Optional[str] = None
 
 # =============================================================================
 # MULTI-AGENT ENDPOINTS
@@ -4372,16 +4376,70 @@ async def configure_platform(platform: str, request: PlatformConfigRequest):
             logger.error("❌ No configuration provided")
             raise HTTPException(status_code=400, detail="No configuration provided")
         
-        # Update platform configuration
-        social_media_agent.platform_configs[platform].update(request.config)
-        logger.info(f"✅ Updated {platform} configuration")
+        # Special handling for LinkedIn
+        if platform == 'linkedin':
+            logger.info("🔷 Special LinkedIn configuration handling")
+            
+            # Save LinkedIn credentials to .env file persistently
+            env_path = Path(__file__).parent / '.env'
+            
+            # Read existing .env content
+            env_content = ""
+            if env_path.exists():
+                with open(env_path, 'r') as f:
+                    env_content = f.read()
+            
+            # Parse existing .env lines
+            lines = env_content.split('\n')
+            
+            # Remove existing LinkedIn entries
+            filtered_lines = [line for line in lines if not line.startswith('LINKEDIN_')]
+            
+            # Add new LinkedIn credentials to .env file
+            filtered_lines.extend(['', '# LinkedIn OAuth Credentials (Updated via Frontend)'])
+            
+            for key, value in request.config.items():
+                if value:  # Only set non-empty values
+                    if key == 'client_id':
+                        filtered_lines.append(f'LINKEDIN_CLIENT_ID={value}')
+                        os.environ['LINKEDIN_CLIENT_ID'] = value
+                        logger.info("✅ Set LinkedIn Client ID")
+                    elif key == 'client_secret':
+                        filtered_lines.append(f'LINKEDIN_CLIENT_SECRET={value}')
+                        os.environ['LINKEDIN_CLIENT_SECRET'] = value
+                        logger.info("✅ Set LinkedIn Client Secret")
+                    elif key == 'access_token':
+                        filtered_lines.append(f'LINKEDIN_ACCESS_TOKEN={value}')
+                        os.environ['LINKEDIN_ACCESS_TOKEN'] = value
+                        logger.info("✅ Set LinkedIn Access Token")
+            
+            # Add redirect URI
+            filtered_lines.append('LINKEDIN_REDIRECT_URI=http://localhost:8001/social/linkedin/callback')
+            os.environ['LINKEDIN_REDIRECT_URI'] = 'http://localhost:8001/social/linkedin/callback'
+            
+            # Write back to .env file
+            try:
+                with open(env_path, 'w') as f:
+                    f.write('\n'.join(filtered_lines))
+                logger.info("💾 LinkedIn credentials saved to .env file")
+            except Exception as e:
+                logger.error(f"Failed to write to .env file: {e}")
+            
+            # Reinitialize LinkedIn agent with new credentials
+            linkedin_agent.__init__()
+            logger.info("🔄 LinkedIn agent reinitialized")
         
-        # Save to environment variables (simplified for demo)
-        for key, value in request.config.items():
-            if value:  # Only set non-empty values
-                env_var = f"{platform.upper()}_{key.upper()}"
-                os.environ[env_var] = value
-                logger.info(f"🔑 Set environment variable: {env_var}")
+        # Update platform configuration for all platforms
+        social_media_agent.platform_configs[platform].update(request.config)
+        logger.info(f"✅ Updated {platform} configuration in memory")
+        
+        # For non-LinkedIn platforms, save to environment variables
+        if platform != 'linkedin':
+            for key, value in request.config.items():
+                if value:  # Only set non-empty values
+                    env_var = f"{platform.upper()}_{key.upper()}"
+                    os.environ[env_var] = value
+                    logger.info(f"🔑 Set environment variable: {env_var}")
         
         return {"success": True, "message": f"{platform.capitalize()} configured successfully"}
             
@@ -4479,9 +4537,41 @@ async def schedule_posts(request: SchedulePostRequest):
 async def post_to_social_media(request: PostToSocialMediaRequest):
     """Post content immediately to a social media platform"""
     try:
-        # This would integrate with actual platform APIs
-        # For demo, we'll return success status
+        # First, try to load the post data using the post_id from scheduled posts
+        logger.info(f"Loading post data for post_id: {request.post_id}")
+        posts = load_scheduled_posts()
         
+        # Find the specific post by ID
+        post_data = None
+        for post in posts:
+            if post.get('id') == request.post_id:
+                post_data = post
+                break
+        
+        # If post is not found in scheduled posts, use content from request
+        if not post_data:
+            logger.info(f"Post {request.post_id} not found in scheduled posts, using content from request")
+            
+            if not request.content:
+                logger.error(f"Post {request.post_id} not found in storage and no content provided in request")
+                raise HTTPException(status_code=400, detail=f"Post {request.post_id} not found and no content provided")
+            
+            # Use content from request
+            post_content = request.content
+            post_image_data = request.image_data
+            logger.info(f"Using content from request: {post_content[:100]}...")
+        else:
+            logger.info(f"Found post data in storage: {post_data.get('content', '')[:100]}...")
+            
+            # Extract content and image data from the stored post
+            post_content = post_data.get('content', '')
+            post_image_data = post_data.get('image_data')
+        
+        if not post_content:
+            logger.error(f"No content available for post {request.post_id}")
+            raise HTTPException(status_code=400, detail=f"No content available for post {request.post_id}")
+        
+        # Check platform configuration
         platform_status = social_media_agent.get_platform_status()
         if not platform_status[request.platform]['configured']:
             missing_fields = platform_status[request.platform]['missing_fields']
@@ -4490,15 +4580,52 @@ async def post_to_social_media(request: PostToSocialMediaRequest):
                 detail=f"Platform {request.platform} not properly configured. Missing: {', '.join(missing_fields)}"
             )
         
-        # Simulate posting (in production, this would call actual APIs)
-        result = {
-            "success": True,
-            "post_id": request.post_id,
-            "platform": request.platform,
-            "posted_at": datetime.now().isoformat(),
-            "message": f"Successfully posted to {request.platform}",
-            "post_url": f"https://{request.platform}.com/posts/{request.post_id}"
-        }
+        # Actually post to the platforms
+        if request.platform == 'linkedin':
+            # Get access token from environment or storage
+            access_token = os.getenv('LINKEDIN_ACCESS_TOKEN')
+            if not access_token:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="LinkedIn access token not configured. Please complete LinkedIn authentication first."
+                )
+            
+            logger.info(f"Posting to LinkedIn with content: {post_content[:100]}...")
+            
+            # Post to LinkedIn with the content and image
+            linkedin_result = linkedin_agent.post_to_linkedin(
+                message=post_content,
+                access_token=access_token,
+                image_data=post_image_data
+            )
+            
+            logger.info(f"LinkedIn posting successful: {linkedin_result}")
+            
+            result = {
+                "success": True,
+                "post_id": linkedin_result.get("post_id", request.post_id),
+                "platform": request.platform,
+                "posted_at": linkedin_result.get("posted_at", datetime.now().isoformat()),
+                "message": f"Successfully posted to LinkedIn",
+                "linkedin_post_id": linkedin_result.get("post_id"),
+                "original_post_id": request.post_id,
+                "content_source": "scheduled_storage" if post_data else "request_content"
+            }
+            
+        else:
+            # For other platforms, return simulation for now
+            # TODO: Implement Facebook, Instagram, TikTok, X posting
+            result = {
+                "success": True,
+                "post_id": request.post_id,
+                "platform": request.platform,
+                "posted_at": datetime.now().isoformat(),
+                "message": f"Successfully posted to {request.platform} (simulated)",
+                "post_url": f"https://{request.platform}.com/posts/{request.post_id}",
+                "note": "This is a simulated post. Actual API integration needed for this platform.",
+                "content": post_content[:100] + "..." if len(post_content) > 100 else post_content,
+                "content_source": "scheduled_storage" if post_data else "request_content"
+            }
         
         return result
         
@@ -4797,6 +4924,41 @@ def linkedin_auth():
         logger.error(f"LinkedIn auth error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.get("/linkedin/status")
+async def get_linkedin_status():
+    """Get LinkedIn configuration and authentication status"""
+    try:
+        has_client_id = bool(os.getenv('LINKEDIN_CLIENT_ID'))
+        has_client_secret = bool(os.getenv('LINKEDIN_CLIENT_SECRET'))
+        has_access_token = bool(os.getenv('LINKEDIN_ACCESS_TOKEN'))
+        
+        status = {
+            "configured": {
+                "client_id": has_client_id,
+                "client_secret": has_client_secret,
+                "access_token": has_access_token
+            },
+            "redirect_uri": os.getenv('LINKEDIN_REDIRECT_URI', 'http://localhost:8001/social/linkedin/callback'),
+            "ready_to_post": has_access_token
+        }
+        
+        # Test access token if available
+        if has_access_token:
+            try:
+                person_id = linkedin_agent.get_person_id()
+                status["person_id_valid"] = bool(person_id)
+                if person_id:
+                    status["person_id"] = person_id
+            except Exception as e:
+                status["person_id_valid"] = False
+                status["token_error"] = str(e)
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"LinkedIn status error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get LinkedIn status: {str(e)}")
+
 @app.get("/social/linkedin/callback")
 def linkedin_callback(code: str = None, error: str = None):
     """Handle LinkedIn OAuth callback"""
@@ -4841,6 +5003,39 @@ async def post_to_linkedin(request: dict):
     except Exception as e:
         logger.error(f"LinkedIn posting error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to post to LinkedIn: {str(e)}")
+
+@app.post("/linkedin/test")
+async def test_linkedin_connection():
+    """Test LinkedIn connection without posting"""
+    try:
+        has_credentials = bool(os.getenv('LINKEDIN_CLIENT_ID')) and bool(os.getenv('LINKEDIN_CLIENT_SECRET'))
+        has_token = bool(os.getenv('LINKEDIN_ACCESS_TOKEN'))
+        
+        result = {
+            "credentials_configured": has_credentials,
+            "access_token_available": has_token
+        }
+        
+        if has_token:
+            # Test the token by getting person ID
+            person_id = linkedin_agent.get_person_id()
+            result["person_id_valid"] = bool(person_id)
+            if person_id:
+                result["person_id"] = person_id
+                result["ready_to_post"] = True
+        else:
+            result["ready_to_post"] = False
+            if has_credentials:
+                result["auth_url"] = linkedin_agent.get_auth_url()
+                result["message"] = "Complete OAuth flow using the auth_url to get access token"
+            else:
+                result["message"] = "LinkedIn credentials not configured. Run setup_linkedin.py first."
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"LinkedIn test error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"LinkedIn test failed: {str(e)}")
 
 # =============================================================================
 # INVESTOR RECOMMENDATION ENDPOINTS
@@ -4938,6 +5133,157 @@ async def save_investor_analysis(request: dict):
     except Exception as e:
         logger.error(f"Error saving investor analysis: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save investor analysis: {str(e)}")
+
+# =============================================================================
+# LINKEDIN OAUTH ENDPOINTS
+# =============================================================================
+
+@app.get("/linkedin/auth")
+async def linkedin_get_auth_url():
+    """
+    Get LinkedIn OAuth authorization URL
+    """
+    try:
+        auth_url = linkedin_agent.get_auth_url()
+        logger.info(f"Generated LinkedIn auth URL: {auth_url}")
+        
+        return {
+            "success": True,
+            "auth_url": auth_url,
+            "message": "Visit this URL to authorize the LinkedIn integration"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating LinkedIn auth URL: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate auth URL: {str(e)}")
+
+@app.get("/social/linkedin/callback")
+async def linkedin_oauth_callback(code: str = None, state: str = None, error: str = None):
+    """
+    Handle LinkedIn OAuth callback
+    """
+    try:
+        if error:
+            logger.error(f"LinkedIn OAuth error: {error}")
+            return PlainTextResponse(f"LinkedIn authorization failed: {error}", status_code=400)
+        
+        if not code:
+            logger.error("No authorization code received from LinkedIn")
+            return PlainTextResponse("Missing authorization code", status_code=400)
+        
+        logger.info(f"Received LinkedIn authorization code: {code[:10]}...")
+        
+        # Exchange code for access token
+        token_data = linkedin_agent.exchange_code_for_token(code)
+        access_token = token_data.get('access_token')
+        
+        if not access_token:
+            logger.error("No access token in LinkedIn response")
+            return PlainTextResponse("Failed to get access token", status_code=400)
+        
+        logger.info("Successfully obtained LinkedIn access token")
+        
+        # Update environment variable (for this session)
+        os.environ['LINKEDIN_ACCESS_TOKEN'] = access_token
+        linkedin_agent.access_token = access_token
+        
+        # Update .env file for persistence
+        env_path = Path(__file__).parent / '.env'
+        if env_path.exists():
+            with open(env_path, 'r') as f:
+                env_content = f.read()
+            
+            # Remove existing LINKEDIN_ACCESS_TOKEN line
+            lines = [line for line in env_content.split('\n') if not line.startswith('LINKEDIN_ACCESS_TOKEN=')]
+            
+            # Add new token
+            lines.append(f'LINKEDIN_ACCESS_TOKEN={access_token}')
+            
+            with open(env_path, 'w') as f:
+                f.write('\n'.join(lines))
+            
+            logger.info("Updated .env file with new LinkedIn access token")
+        
+        return PlainTextResponse(
+            "✅ LinkedIn integration successful!\n\n"
+            "Your LinkedIn access token has been saved. You can now:\n"
+            "- Close this window\n"
+            "- Return to your application\n"
+            "- Start posting to LinkedIn!\n\n"
+            f"Token expires in: {token_data.get('expires_in', 'unknown')} seconds",
+            status_code=200
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in LinkedIn OAuth callback: {str(e)}")
+        return PlainTextResponse(f"OAuth callback failed: {str(e)}", status_code=500)
+
+@app.get("/linkedin/status")
+async def linkedin_check_status():
+    """
+    Check LinkedIn integration status
+    """
+    try:
+        # First reload the access token from environment
+        linkedin_agent.access_token = os.getenv('LINKEDIN_ACCESS_TOKEN')
+        
+        if not linkedin_agent.access_token:
+            return {
+                "success": False,
+                "authenticated": False,
+                "message": "No LinkedIn access token configured",
+                "setup_required": True
+            }
+        
+        # Test the token by getting user info
+        person_id = linkedin_agent.get_person_id()
+        
+        if person_id:
+            return {
+                "success": True,
+                "authenticated": True,
+                "person_id": person_id,
+                "message": "LinkedIn integration is working correctly",
+                "token_preview": linkedin_agent.access_token[:20] + "..." if linkedin_agent.access_token else "None"
+            }
+        else:
+            return {
+                "success": False,
+                "authenticated": False,
+                "message": "LinkedIn access token is invalid or expired",
+                "refresh_required": True,
+                "token_preview": linkedin_agent.access_token[:20] + "..." if linkedin_agent.access_token else "None"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error checking LinkedIn status: {str(e)}")
+        return {
+            "success": False,
+            "authenticated": False,
+            "message": f"Error checking status: {str(e)}",
+            "refresh_required": True,
+            "token_preview": linkedin_agent.access_token[:20] + "..." if linkedin_agent.access_token else "None"
+        }
+
+@app.get("/linkedin/debug")
+async def linkedin_debug():
+    """
+    Debug LinkedIn configuration and token
+    """
+    try:
+        # Reload token from environment
+        linkedin_agent.access_token = os.getenv('LINKEDIN_ACCESS_TOKEN')
+        
+        return {
+            "client_id": linkedin_agent.client_id,
+            "client_secret": "***" + linkedin_agent.client_secret[-4:] if linkedin_agent.client_secret else None,
+            "redirect_uri": linkedin_agent.redirect_uri,
+            "token_length": len(linkedin_agent.access_token) if linkedin_agent.access_token else 0,
+            "token_preview": linkedin_agent.access_token[:30] + "..." if linkedin_agent.access_token else None,
+            "has_token": bool(linkedin_agent.access_token)
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 # =============================================================================
 # MAIN ENTRY POINT
