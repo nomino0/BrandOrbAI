@@ -19,7 +19,7 @@ class BrandOrchestrator:
         self.model = "qwen/qwen-2.5-coder-32b-instruct"
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key="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"
+            api_key=os.getenv("OPENROUTER_API_KEY", "your-api-key-here")
         )
         self.brand_identity_agent = BrandIdentityAgent()
         self.discovery_agent = BrandDiscoveryAgent()

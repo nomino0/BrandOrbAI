@@ -40,10 +40,13 @@ import {
   getMarketingInsights,
   getTopEngagingPosts,
   addCompetitor,
+  discoverCompetitors,
+  convertDiscoveredCompetitorsToUI,
   type MarketingAnalysisResponse,
   type MarketingInsightsResponse,
   type TopPostsResponse,
-  type AddCompetitorRequest
+  type AddCompetitorRequest,
+  type CompetitorDiscoveryRequest
 } from '@/services/agents';
 
 interface Competitor {
@@ -51,45 +54,87 @@ interface Competitor {
   url: string;
   platform: 'linkedin' | 'tiktok';
   name: string;
+  industry?: string;
+  description?: string;
+  confidence_score?: number;
+  discovery_method?: string;
+  // Google Maps specific fields
+  place_id?: string;
+  address?: string;
+  phone?: string;
+  rating?: number;
+  review_count?: number;
+  website?: string;
 }
 
 interface AnalysisStatus extends MarketingAnalysisResponse {}
 
 interface MarketingInsights extends MarketingInsightsResponse {}
 
-// Simulated competitors (Talan Tunisia and similar companies)
-const SIMULATED_COMPETITORS: Competitor[] = [
-  {
-    id: '1',
-    url: 'https://linkedin.com/company/talan-tunisie/posts/?feedView=all',
-    platform: 'linkedin',
-    name: 'Talan Tunisia'
-  },
-  {
-    id: '2', 
-    url: 'https://linkedin.com/company/vermeg-group/posts/?feedView=all',
-    platform: 'linkedin',
-    name: 'Vermeg Group'
-  },
-  {
-    id: '3',
-    url: 'https://linkedin.com/company/sofrecom-tunisie/posts/?feedView=all',
-    platform: 'linkedin',
-    name: 'Sofrecom Tunisia'
-  },
-  {
-    id: '4',
-    url: 'https://tiktok.com/@talan_group',
-    platform: 'tiktok',
-    name: 'talan_group'
-  }
-];
+interface DiscoveredCompetitor {
+  id: string;
+  name: string;
+  industry: string;
+  description: string;
+  linkedin_url?: string;
+  tiktok_url?: string;
+  website?: string;
+  confidence_score: number;
+  discovery_method: string;
+  place_id?: string;
+  address?: string;
+  phone?: string;
+  rating?: number;
+  review_count?: number;
+}
+
+interface CompetitorDiscoveryResponse {
+  success: boolean;
+  message: string;
+  discovered_competitors: DiscoveredCompetitor[];
+  analysis_ready_urls: string[];
+  summary: {
+    total_competitors: number;
+    linkedin_profiles: number;
+    tiktok_profiles: number;
+    google_maps_businesses: number;
+    discovery_method: string;
+  };
+  linkedin_urls: string[];
+  tiktok_urls: string[];
+  google_maps_data: any[];
+  search_parameters: {
+    use_google_maps: boolean;
+    location?: string;
+    max_competitors: number;
+  };
+}
 
 // Competitor Study Introduction Component
-const CompetitorStudyIntro = ({ competitors, onAddCompetitor, onRemoveCompetitor }: { 
+const CompetitorStudyIntro = ({ 
+  competitors, 
+  onAddCompetitor, 
+  onRemoveCompetitor, 
+  onRediscoverCompetitors, 
+  discoveringCompetitors,
+  showBusinessSummaryForm,
+  setShowBusinessSummaryForm,
+  businessSummaryInput,
+  setBusinessSummaryInput,
+  handleUpdateBusinessSummary,
+  handleClearCache
+}: { 
   competitors: Competitor[], 
   onAddCompetitor: (url: string, platform: 'linkedin' | 'tiktok') => void,
-  onRemoveCompetitor: (id: string) => void
+  onRemoveCompetitor: (id: string) => void,
+  onRediscoverCompetitors: () => void,
+  discoveringCompetitors: boolean,
+  showBusinessSummaryForm: boolean,
+  setShowBusinessSummaryForm: (show: boolean) => void,
+  businessSummaryInput: string,
+  setBusinessSummaryInput: (summary: string) => void,
+  handleUpdateBusinessSummary: () => void,
+  handleClearCache: () => void
 }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCompetitorUrl, setNewCompetitorUrl] = useState('');
@@ -174,29 +219,20 @@ const CompetitorStudyIntro = ({ competitors, onAddCompetitor, onRemoveCompetitor
                   </button>
                 </div>
               ))}
-              
-              {/* Add More Button */}
-              {!showAddForm ? (
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg border-2 border-dashed border-gray-300 transition-colors"
-                >
-                  <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
-                    <Plus className="h-3 w-3 text-gray-600" />
-                  </div>
-                  <span className="font-medium text-gray-600 text-sm">Add Competitor</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 bg-white p-3 rounded-lg border-2 border-blue-300 shadow-lg">
-                  <Select value={selectedPlatform} onValueChange={(value: 'linkedin' | 'tiktok') => setSelectedPlatform(value)}>
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="linkedin">LinkedIn</SelectItem>
-                      <SelectItem value="tiktok">TikTok</SelectItem>
-                    </SelectContent>
-                  </Select>
+            </div>
+
+            {/* Add Form */}
+            {showAddForm && (
+              <div className="flex items-center gap-2 bg-white p-3 rounded-lg border-2 border-blue-300 shadow-lg">
+                <Select value={selectedPlatform} onValueChange={(value: 'linkedin' | 'tiktok') => setSelectedPlatform(value)}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="linkedin">LinkedIn</SelectItem>
+                    <SelectItem value="tiktok">TikTok</SelectItem>
+                  </SelectContent>
+                </Select>
                   <Input
                     placeholder={selectedPlatform === 'linkedin' ? 'https://linkedin.com/company/...' : 'https://tiktok.com/@...'}
                     value={newCompetitorUrl}
@@ -224,7 +260,116 @@ const CompetitorStudyIntro = ({ competitors, onAddCompetitor, onRemoveCompetitor
                   </Button>
                 </div>
               )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAddForm(true)}
+                disabled={showAddForm}
+                className="flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Competitor Manually
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRediscoverCompetitors}
+                disabled={discoveringCompetitors}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100"
+              >
+                {discoveringCompetitors ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                {discoveringCompetitors ? 'Discovering...' : 'Rediscover Competitors'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBusinessSummaryForm(true)}
+                className="flex items-center gap-2"
+              >
+                <Lightbulb className="h-4 w-4" />
+                Update Business Info
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearCache}
+                className="flex items-center gap-2 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Clear Cache & Restart
+              </Button>
+              {competitors.length > 0 && (
+                <Badge variant="secondary" className="px-3 py-1 flex items-center gap-1">
+                  {competitors.filter(c => c.discovery_method === 'AI').length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Zap className="h-3 w-3" />
+                      AI Discovered
+                    </span>
+                  )}
+                  {competitors.filter(c => c.discovery_method === 'google_maps').length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Globe className="h-3 w-3" />
+                      Maps Enhanced
+                    </span>
+                  )}
+                  {competitors.filter(c => c.discovery_method === 'manual').length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      Manual Added
+                    </span>
+                  )}
+                </Badge>
+              )}
             </div>
+
+            {/* Business Summary Form */}
+            {showBusinessSummaryForm && (
+              <div className="bg-white p-4 rounded-lg border-2 border-yellow-300 shadow-lg">
+                <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-yellow-600" />
+                  Update Your Business Information
+                </h4>
+                <p className="text-sm text-gray-600 mb-3">
+                  Provide a brief description of your business to help discover more relevant competitors.
+                </p>
+                <textarea
+                  placeholder="Describe your business, industry, target market, and key services/products..."
+                  value={businessSummaryInput}
+                  onChange={(e) => setBusinessSummaryInput(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 text-sm"
+                  rows={3}
+                />
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    onClick={handleUpdateBusinessSummary}
+                    disabled={!businessSummaryInput.trim()}
+                    className="bg-yellow-600 hover:bg-yellow-700"
+                  >
+                    <Check className="h-3 w-3 mr-1" />
+                    Save & Rediscover
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setShowBusinessSummaryForm(false);
+                      setBusinessSummaryInput(businessSummaryInput); // Reset to original
+                    }}
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Dynamic Study Results Summary */}
@@ -1195,11 +1340,364 @@ export default function MarketingStrategyPage() {
   const [loading, setLoading] = useState(true);
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus | null>(null);
   const [insights, setInsights] = useState<MarketingInsights | null>(null);
-  const [competitors, setCompetitors] = useState<Competitor[]>(SIMULATED_COMPETITORS);
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [discoveringCompetitors, setDiscoveringCompetitors] = useState(false);
+  const [showBusinessSummaryForm, setShowBusinessSummaryForm] = useState(false);
+  const [businessSummaryInput, setBusinessSummaryInput] = useState('');
+  const [isClientSide, setIsClientSide] = useState(false);
+  const [isDataFromCache, setIsDataFromCache] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
 
   useEffect(() => {
-    simulateMarketingAnalysis();
+    // Mark as client-side to prevent hydration errors
+    setIsClientSide(true);
+    
+    // Check if data is from cache after client-side rendering
+    const cachedData = localStorage.getItem('marketing_analysis_results');
+    setIsDataFromCache(cachedData !== null);
+    
+    initializeCompetitorAnalysis();
   }, []);
+
+  useEffect(() => {
+    // Load existing business summary if available (client-side only)
+    if (isClientSide) {
+      const existingSummary = 
+        localStorage.getItem('business_summary') || 
+        localStorage.getItem('brandorb_business_summary') ||
+        localStorage.getItem('ideation_summary') ||
+        '';
+      setBusinessSummaryInput(existingSummary);
+    }
+  }, [isClientSide]);
+
+  // Initialize by discovering competitors first (only once)
+  const initializeCompetitorAnalysis = async () => {
+    if (!isClientSide) return; // Wait for client-side rendering
+    
+    try {
+      setLoading(true);
+      
+      // Check if we have cached analysis results
+      const savedCompetitors = localStorage.getItem('discovered_competitors');
+      const savedAnalysis = localStorage.getItem('marketing_analysis_results');
+      
+      if (savedCompetitors && savedAnalysis) {
+        try {
+          const competitors = JSON.parse(savedCompetitors);
+          const analysis = JSON.parse(savedAnalysis);
+          
+          if (competitors && competitors.length > 0 && analysis) {
+            setCompetitors(competitors);
+            setAnalysisStatus(analysis.status);
+            setInsights(analysis.insights);
+            setAnalysisComplete(true);
+            setIsDataFromCache(true);
+            setLoading(false);
+            
+            toast.success(
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Loaded cached marketing analysis with {competitors.length} competitors
+              </div>
+            );
+            return;
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse cached data, starting fresh:', parseError);
+          // Clear corrupted cache
+          localStorage.removeItem('discovered_competitors');
+          localStorage.removeItem('marketing_analysis_results');
+        }
+      }
+
+      // No valid cached data, start fresh discovery and analysis
+      await discoverAndAnalyzeCompetitors();
+      
+    } catch (error: any) {
+      console.error('Error initializing competitor analysis:', error);
+      toast.error(`Failed to initialize analysis: ${error.message}`);
+      setLoading(false);
+    }
+  };
+
+  // Discover competitors and run marketing analysis
+  const discoverAndAnalyzeCompetitors = async () => {
+    try {
+      setLoading(true);
+      setDiscoveringCompetitors(true);
+      setIsDataFromCache(false);
+      
+      // Step 1: Discover competitors using AI and Google Maps
+      toast.info('🔍 Discovering business competitors...');
+      
+      // Try to get business summary from localStorage
+      let businessSummary = 
+        localStorage.getItem('business_summary') || 
+        localStorage.getItem('brandorb_business_summary') ||
+        localStorage.getItem('ideation_summary') ||
+        '';
+      
+      const discoveryRequest: CompetitorDiscoveryRequest = {
+        business_summary: businessSummary || undefined,
+        max_competitors: 6,
+        use_google_maps: true,
+        location: undefined
+      };
+      
+      const discoveryResult = await discoverCompetitors(discoveryRequest);
+      
+      if (discoveryResult.success && discoveryResult.discovered_competitors.length > 0) {
+        // Convert discovered competitors to UI format
+        const uiCompetitors = convertDiscoveredCompetitorsToUI(discoveryResult.discovered_competitors);
+        setCompetitors(uiCompetitors);
+        
+        // Save competitors to localStorage
+        localStorage.setItem('discovered_competitors', JSON.stringify(uiCompetitors));
+        
+        toast.success(
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Found {discoveryResult.summary.total_competitors} competitors! 
+            ({discoveryResult.summary.linkedin_profiles} LinkedIn, {discoveryResult.summary.tiktok_profiles} TikTok)
+          </div>
+        );
+        
+        setDiscoveringCompetitors(false);
+        
+        // Step 2: Start marketing analysis with discovered competitors
+        await startMarketingAnalysisWithCompetitors(uiCompetitors);
+      } else {
+        toast.warning('No competitors found through discovery. Using fallback competitors...');
+        
+        // Fallback: Use simulated data for demonstration
+        const fallbackCompetitors = generateFallbackCompetitors();
+        setCompetitors(fallbackCompetitors);
+        localStorage.setItem('discovered_competitors', JSON.stringify(fallbackCompetitors));
+        
+        setDiscoveringCompetitors(false);
+        
+        // Continue with analysis using fallback data
+        await startMarketingAnalysisWithCompetitors(fallbackCompetitors);
+      }
+    } catch (error: any) {
+      console.error('Error in competitor discovery and analysis:', error);
+      toast.error(`Discovery failed: ${error.message}`);
+      
+      // Try fallback approach
+      try {
+        const fallbackCompetitors = generateFallbackCompetitors();
+        setCompetitors(fallbackCompetitors);
+        localStorage.setItem('discovered_competitors', JSON.stringify(fallbackCompetitors));
+        toast.info('Using sample competitors for demonstration');
+        
+        setDiscoveringCompetitors(false);
+        await startMarketingAnalysisWithCompetitors(fallbackCompetitors);
+      } catch (fallbackError) {
+        console.error('Even fallback failed:', fallbackError);
+        setLoading(false);
+        setDiscoveringCompetitors(false);
+        toast.error('Failed to initialize competitor analysis');
+      }
+    }
+  };
+
+  // Generate fallback competitors for demonstration
+  const generateFallbackCompetitors = (): Competitor[] => {
+    return [
+      {
+        id: 'fallback-1',
+        url: 'https://linkedin.com/company/microsoft',
+        platform: 'linkedin',
+        name: 'Microsoft',
+        industry: 'Technology',
+        description: 'Technology and cloud services company',
+        confidence_score: 0.9,
+        discovery_method: 'fallback'
+      },
+      {
+        id: 'fallback-2',
+        url: 'https://linkedin.com/company/google',
+        platform: 'linkedin',
+        name: 'Google',
+        industry: 'Technology',
+        description: 'Internet services and technology company',
+        confidence_score: 0.9,
+        discovery_method: 'fallback'
+      },
+      {
+        id: 'fallback-3',
+        url: 'https://linkedin.com/company/ibm',
+        platform: 'linkedin',
+        name: 'IBM',
+        industry: 'Technology',
+        description: 'Enterprise technology and consulting services',
+        confidence_score: 0.8,
+        discovery_method: 'fallback'
+      }
+    ];
+  };
+
+  // Start marketing analysis with discovered competitors
+  const startMarketingAnalysisWithCompetitors = async (competitorList: Competitor[]) => {
+    if (!competitorList || competitorList.length === 0) {
+      toast.error('Cannot start analysis without competitors');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      toast.info(`🧠 Analyzing marketing strategies for ${competitorList.length} competitors...`);
+      
+      // Prepare competitor URLs for analysis
+      const competitorUrls = competitorList.map(c => c.url).filter(url => url && url.trim() !== '');
+      
+      if (competitorUrls.length === 0) {
+        toast.error('No valid competitor URLs found');
+        setLoading(false);
+        return;
+      }
+
+      // Get business context data
+      let businessSummary = '';
+      let brandIdentity = {};
+      let viabilityData = {};
+
+      if (typeof window !== 'undefined') {
+        businessSummary = 
+          localStorage.getItem('business_summary') || 
+          localStorage.getItem('brandorb_business_summary') ||
+          localStorage.getItem('ideation_summary') ||
+          '';
+        
+        try {
+          const brandData = localStorage.getItem('brand_identity_data');
+          if (brandData) brandIdentity = JSON.parse(brandData);
+        } catch (e) {
+          console.warn('Could not parse brand identity data');
+        }
+
+        try {
+          const viabilityOutput = localStorage.getItem('viability_output');
+          if (viabilityOutput) viabilityData = JSON.parse(viabilityOutput);
+        } catch (e) {
+          console.warn('Could not parse viability data');
+        }
+      }
+
+      // Start the comprehensive analysis
+      const response = await fetch('http://localhost:8001/marketing-strategy/comprehensive-analysis-with-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          competitors: competitorUrls,
+          business_summary: businessSummary,
+          brand_identity: brandIdentity,
+          viability_data: viabilityData,
+          use_google_maps: true
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Analysis API failed: ${response.status} - ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      setAnalysisStatus(result);
+      
+      toast.info('⏳ Processing competitor data and generating insights...');
+      
+      // Wait for analysis to complete and get insights
+      setTimeout(async () => {
+        try {
+          const insightsResponse = await fetch(`http://localhost:8001/marketing-strategy/analysis/${result.analysis_id}/insights`);
+          
+          if (insightsResponse.ok) {
+            const insightsData = await insightsResponse.json();
+            setInsights(insightsData);
+            setAnalysisComplete(true);
+            
+            // Save complete analysis results to localStorage
+            const analysisResults = {
+              status: result,
+              insights: insightsData,
+              timestamp: new Date().toISOString(),
+              competitor_count: competitorList.length
+            };
+            localStorage.setItem('marketing_analysis_results', JSON.stringify(analysisResults));
+            
+            toast.success(
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Marketing analysis completed! Analyzed {competitorList.length} competitors
+              </div>
+            );
+          } else {
+            throw new Error('Failed to get insights from API');
+          }
+        } catch (insightsError) {
+          console.warn('API insights failed, using simulated data:', insightsError);
+          
+          // Fallback to simulated insights
+          const simulatedInsights = generateSimulatedInsights(result.business_context || {}, competitorList);
+          setInsights(simulatedInsights);
+          setAnalysisComplete(true);
+          
+          // Save simulated results
+          const analysisResults = {
+            status: result,
+            insights: simulatedInsights,
+            timestamp: new Date().toISOString(),
+            competitor_count: competitorList.length,
+            fallback: true
+          };
+          localStorage.setItem('marketing_analysis_results', JSON.stringify(analysisResults));
+          
+          toast.success(
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Marketing analysis completed with simulated insights!
+            </div>
+          );
+        }
+        
+        setLoading(false);
+      }, 4000); // Increased timeout to allow for proper processing
+      
+    } catch (error: any) {
+      console.error('Error starting marketing analysis:', error);
+      toast.error(`Analysis failed: ${error.message}`);
+      
+      // Complete fallback to simulated analysis
+      try {
+        const simulatedStatus = generateSimulatedAnalysis(competitorList);
+        const simulatedInsights = generateSimulatedInsights({}, competitorList);
+        setAnalysisStatus(simulatedStatus);
+        setInsights(simulatedInsights);
+        setAnalysisComplete(true);
+        
+        // Save fallback results
+        const analysisResults = {
+          status: simulatedStatus,
+          insights: simulatedInsights,
+          timestamp: new Date().toISOString(),
+          competitor_count: competitorList.length,
+          fallback: true,
+          error: error.message
+        };
+        localStorage.setItem('marketing_analysis_results', JSON.stringify(analysisResults));
+        
+        toast.info('Using simulated analysis data due to API issues');
+      } catch (fallbackError) {
+        console.error('Complete failure:', fallbackError);
+        toast.error('Unable to perform any analysis');
+      }
+      
+      setLoading(false);
+    }
+  };
 
   const handleAddCompetitor = (url: string, platform: 'linkedin' | 'tiktok') => {
     const competitorName = url.includes('linkedin.com') 
@@ -1210,15 +1708,84 @@ export default function MarketingStrategyPage() {
       id: (competitors.length + 1).toString(),
       url: url,
       platform: platform,
-      name: competitorName
+      name: competitorName,
+      discovery_method: 'manual'
     };
-    setCompetitors([...competitors, newCompetitor]);
+    
+    const updatedCompetitors = [...competitors, newCompetitor];
+    setCompetitors(updatedCompetitors);
+    
+    // Update saved competitors (client-side only)
+    if (isClientSide) {
+      localStorage.setItem('discovered_competitors', JSON.stringify(updatedCompetitors));
+    }
+    
     toast.success(`${competitorName} added for analysis!`);
   };
 
   const handleRemoveCompetitor = (id: string) => {
-    setCompetitors(competitors.filter(c => c.id !== id));
+    const updatedCompetitors = competitors.filter(c => c.id !== id);
+    setCompetitors(updatedCompetitors);
+    
+    // Update saved competitors (client-side only)
+    if (isClientSide) {
+      localStorage.setItem('discovered_competitors', JSON.stringify(updatedCompetitors));
+    }
+    
     toast.success('Competitor removed from analysis.');
+  };
+
+  const handleRediscoverCompetitors = async () => {
+    if (discoveringCompetitors || !isClientSide) return;
+    
+    try {
+      setDiscoveringCompetitors(true);
+      toast.info('Rediscovering competitors with enhanced search...');
+      
+      // Clear existing saved data to force fresh discovery
+      localStorage.removeItem('discovered_competitors');
+      localStorage.removeItem('marketing_analysis_results');
+      setIsDataFromCache(false);
+      
+      // Try to get business summary from localStorage
+      let businessSummary = 
+        localStorage.getItem('business_summary') || 
+        localStorage.getItem('brandorb_business_summary') ||
+        localStorage.getItem('ideation_summary') ||
+        '';
+      
+      const discoveryRequest: CompetitorDiscoveryRequest = {
+        business_summary: businessSummary || undefined,
+        max_competitors: 8,
+        use_google_maps: true,
+        location: undefined
+      };
+      
+      const discoveryResult = await discoverCompetitors(discoveryRequest);
+      
+      if (discoveryResult.success && discoveryResult.discovered_competitors.length > 0) {
+        const uiCompetitors = convertDiscoveredCompetitorsToUI(discoveryResult.discovered_competitors);
+        setCompetitors(uiCompetitors);
+        
+        // Save new competitors
+        localStorage.setItem('discovered_competitors', JSON.stringify(uiCompetitors));
+        
+        toast.success(
+          `Updated competitor list! Found ${discoveryResult.summary.total_competitors} competitors ` +
+          `(${discoveryResult.summary.linkedin_profiles} LinkedIn, ${discoveryResult.summary.tiktok_profiles} TikTok)`
+        );
+      } else {
+        toast.warning('No additional competitors found.');
+      }
+    } catch (error: any) {
+      console.error('Error rediscovering competitors:', error);
+      toast.error(`Failed to rediscover competitors: ${error.message}`);
+      
+      // If rediscovery fails, suggest manual addition
+      toast.info('Try adding competitors manually using the "Add Competitor" button');
+    } finally {
+      setDiscoveringCompetitors(false);
+    }
   };
 
   const handleSaveCompetitors = async () => {
@@ -1230,75 +1797,58 @@ export default function MarketingStrategyPage() {
     }
   };
 
-  const simulateMarketingAnalysis = async () => {
-    setLoading(true);
-    
-    try {
-      // Simulate starting comprehensive analysis with Talan Tunisia competitors
-      const response = await fetch('http://localhost:8000/marketing-strategy/comprehensive-analysis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          competitors: SIMULATED_COMPETITORS.map(c => c.url),
-          business_summary: '', // Will be read from backend files
-          brand_identity: {},
-          viability_data: {}
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to start analysis');
-      }
-
-      const result = await response.json();
-      setAnalysisStatus(result);
-      
-      // Simulate analysis completion after a short delay
-      setTimeout(async () => {
-        try {
-          const insightsResponse = await fetch(`http://localhost:8000/marketing-strategy/analysis/${result.analysis_id}/insights`);
-          if (insightsResponse.ok) {
-            const insightsData = await insightsResponse.json();
-            setInsights(insightsData);
-          } else {
-            // Fallback to simulated insights if API fails
-            setInsights(generateSimulatedInsights(result.business_context));
-          }
-        } catch (error) {
-          console.error('Failed to load insights:', error);
-          setInsights(generateSimulatedInsights(result.business_context));
-        }
-        setLoading(false);
-      }, 3000);
-      
-    } catch (error) {
-      console.error('Analysis error:', error);
-      // Generate fallback simulated data
-      const simulatedStatus = generateSimulatedAnalysis();
-      setAnalysisStatus(simulatedStatus);
-      setInsights(generateSimulatedInsights(simulatedStatus.business_context));
-      setLoading(false);
-      
-      toast.error('Using simulated data for demonstration');
+  const handleUpdateBusinessSummary = () => {
+    if (!businessSummaryInput.trim()) {
+      toast.error('Please enter a business summary');
+      return;
     }
+
+    if (!isClientSide) return;
+
+    // Save to localStorage
+    localStorage.setItem('business_summary', businessSummaryInput.trim());
+    localStorage.setItem('brandorb_business_summary', businessSummaryInput.trim());
+
+    setShowBusinessSummaryForm(false);
+    toast.success('Business summary updated! You can now rediscover competitors.');
   };
 
-  const generateSimulatedAnalysis = (): AnalysisStatus => {
+  const handleClearCache = () => {
+    if (!isClientSide) return;
+    
+    // Clear all saved analysis data
+    localStorage.removeItem('discovered_competitors');
+    localStorage.removeItem('marketing_analysis_results');
+    
+    // Reset state
+    setCompetitors([]);
+    setAnalysisStatus(null);
+    setInsights(null);
+    setIsDataFromCache(false);
+    
+    toast.success('Cache cleared! Page will reload with fresh analysis.');
+    
+    // Restart the analysis
+    setTimeout(() => {
+      initializeCompetitorAnalysis();
+    }, 1000);
+  };
+
+  const generateSimulatedAnalysis = (currentCompetitors?: Competitor[]): AnalysisStatus => {
+    const competitorsToUse = currentCompetitors || [];
     return {
       analysis_id: 'sim-' + Date.now(),
       status: 'completed',
       linkedin_analysis: {
         session_id: 'linkedin-session',
         status: 'completed',
-        companies: SIMULATED_COMPETITORS.filter(c => c.platform === 'linkedin').map(c => c.url),
+        companies: competitorsToUse.filter((c: Competitor) => c.platform === 'linkedin').map((c: Competitor) => c.url),
         current_status: { status: 'completed' }
       },
       tiktok_analysis: {
         session_id: 'tiktok-session',
         status: 'completed',
-        profiles: SIMULATED_COMPETITORS.filter(c => c.platform === 'tiktok').map(c => c.name),
+        profiles: competitorsToUse.filter((c: Competitor) => c.platform === 'tiktok').map((c: Competitor) => c.name),
         current_status: { status: 'completed' }
       },
       business_context: {
@@ -1313,7 +1863,7 @@ export default function MarketingStrategyPage() {
             currency: 'DT'
           }
         },
-        market_analysis: 'Competitive technology services market with established players like Talan, Vermeg, and Sofrecom.',
+        market_analysis: 'Competitive technology services market with established players.',
         financial_assessment: 'Strong financial projections with focus on B2B enterprise solutions.',
         swot_analysis: { 
           strengths: ['Technical Expertise', 'Regional Knowledge'],
@@ -1324,11 +1874,15 @@ export default function MarketingStrategyPage() {
     };
   };
 
-  const generateSimulatedInsights = (businessContext: any): MarketingInsights => {
+  const generateSimulatedInsights = (businessContext: any, currentCompetitors?: Competitor[]): MarketingInsights => {
+    const competitorsToUse = currentCompetitors || [];
+    const linkedinCompetitors = competitorsToUse.filter((c: Competitor) => c.platform === 'linkedin');
+    const tiktokCompetitors = competitorsToUse.filter((c: Competitor) => c.platform === 'tiktok');
+    
     return {
       analysis_id: 'insights-' + Date.now(),
       linkedin_insights: {
-        insights: `Based on analysis of ${SIMULATED_COMPETITORS.filter(c => c.platform === 'linkedin').map(c => c.name).join(', ')} LinkedIn presence:
+        insights: `Based on analysis of ${linkedinCompetitors.map((c: Competitor) => c.name).join(', ')} LinkedIn presence:
 
 • **Peak Engagement**: Tuesday-Thursday mornings (8-11 AM) show 40% higher engagement rates compared to other time slots
 • **Content Performance**: Technical thought leadership posts receive 2.3x more engagement than generic company updates
@@ -1339,7 +1893,7 @@ export default function MarketingStrategyPage() {
         recommendations: ['Focus on technical thought leadership content', 'Share industry case studies and whitepapers', 'Post during Tuesday-Thursday mornings', 'Use bilingual approach for MENA market']
       },
       tiktok_insights: {
-        insights: `TikTok analysis of ${SIMULATED_COMPETITORS.filter(c => c.platform === 'tiktok').map(c => c.name).join(', ')} reveals strategic opportunities:
+        insights: `TikTok analysis of ${tiktokCompetitors.map((c: Competitor) => c.name).join(', ')} reveals strategic opportunities:
 
 • **Content Gap**: Limited tech consulting presence creates significant opportunity for educational technology content
 • **Optimal Times**: Evening posts (6-9 PM) and weekend content show highest engagement with 85% better performance
@@ -1485,6 +2039,49 @@ export default function MarketingStrategyPage() {
           </div>
         </div>
 
+        {/* Competitor Discovery Status */}
+        {discoveringCompetitors && (
+          <Card className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200">
+            <CardContent className="p-6">
+              <div className="text-center space-y-4">
+                <div className="flex items-center justify-center gap-3">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                  <h3 className="text-lg font-semibold text-blue-800 flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Discovering Business Competitors
+                  </h3>
+                </div>
+                <p className="text-blue-600">
+                  Using AI analysis and Google Maps to find relevant business competitors with social media presence...
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <div className="text-blue-600 font-medium flex items-center gap-2">
+                      <Zap className="h-4 w-4" />
+                      AI Analysis
+                    </div>
+                    <div className="text-gray-600">Analyzing business context</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <div className="text-blue-600 font-medium flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      Google Maps Search
+                    </div>
+                    <div className="text-gray-600">Finding local competitors</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 border border-blue-200">
+                    <div className="text-blue-600 font-medium flex items-center gap-2">
+                      <Share2 className="h-4 w-4" />
+                      Social Media Discovery
+                    </div>
+                    <div className="text-gray-600">LinkedIn & TikTok profiles</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Analysis Status Skeleton */}
         <Card>
           <CardHeader>
@@ -1510,11 +2107,33 @@ export default function MarketingStrategyPage() {
         </Card>
 
         {/* Loading message */}
-        <Card className="bg-blue-50">
+        <Card className="bg-gradient-to-br from-green-50 to-blue-50 border-2 border-green-200">
           <CardContent className="p-6 text-center">
-            <h3 className="text-lg font-semibold text-blue-800 mb-4">Analyzing Competitor Strategies</h3>
-            <p className="text-blue-600 mb-4">Processing LinkedIn and TikTok engagement patterns...</p>
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Loader2 className="h-6 w-6 animate-spin text-green-600" />
+              <h3 className="text-lg font-semibold text-green-800 flex items-center gap-2">
+                {discoveringCompetitors ? (
+                  <>
+                    <Building2 className="h-5 w-5" />
+                    Discovering Competitors
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="h-5 w-5" />
+                    Analyzing Marketing Strategies
+                  </>
+                )}
+              </h3>
+            </div>
+            <p className="text-green-700 mb-4">
+              {discoveringCompetitors 
+                ? 'Finding relevant competitors using AI and Google Maps integration...'
+                : `Processing ${competitors.length} competitor profiles and analyzing engagement patterns...`
+              }
+            </p>
+            <div className="flex justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1528,11 +2147,29 @@ export default function MarketingStrategyPage() {
       {/* Header */}
       <MarketingHeader analysisStatus={analysisStatus} businessContext={businessContext} />
 
+      {/* Cache Indicator */}
+      {isClientSide && isDataFromCache && !loading && (
+        <div className="flex items-center justify-center">
+          <Badge variant="outline" className="flex items-center gap-2 px-3 py-1 bg-blue-50 border-blue-200 text-blue-700">
+            <Clock className="h-3 w-3" />
+            Data loaded from cache - Use "Clear Cache & Restart" for fresh analysis
+          </Badge>
+        </div>
+      )}
+
       {/* Competitor Study Introduction */}
       <CompetitorStudyIntro 
         competitors={competitors}
         onAddCompetitor={handleAddCompetitor}
         onRemoveCompetitor={handleRemoveCompetitor}
+        onRediscoverCompetitors={handleRediscoverCompetitors}
+        discoveringCompetitors={discoveringCompetitors}
+        showBusinessSummaryForm={showBusinessSummaryForm}
+        setShowBusinessSummaryForm={setShowBusinessSummaryForm}
+        businessSummaryInput={businessSummaryInput}
+        setBusinessSummaryInput={setBusinessSummaryInput}
+        handleUpdateBusinessSummary={handleUpdateBusinessSummary}
+        handleClearCache={handleClearCache}
       />
 
       {/* Analysis Overview */}

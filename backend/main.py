@@ -27,6 +27,7 @@ from agents.Financial_Assessment import FinancialAssessmentAgent
 from agents.legal_agent import LegalAgent
 from agents.marketAnalysis_competitors_Agents import run_market_analysis_competitors
 from agents.opportunities_agent import run_opportunities_agent
+from agents.competitor_discovery_agent import discover_business_competitors, CompetitorDiscoveryAgent
 from agents.bmc_agent import extract_bmc_parts, read_multiple_files
 from agents.image_agent import run_image_generation_agent
 from agents.swot_agent import SWOTAgent, run_swot_agent
@@ -2272,9 +2273,14 @@ async def get_stock_images(request: StockImageRequest):
     """Get stock images from Pexels API"""
     logger.info(f"=== STOCK IMAGES REQUEST: {request.query} ===")
     
+    # Get Pexels API key from environment
+    pexels_api_key = os.getenv("PEXELS_API_KEY")
+    if not pexels_api_key:
+        raise HTTPException(status_code=500, detail="Pexels API key not configured")
+    
     try:
         headers = {
-            'Authorization': 't2kXItoCsRYzjXRMm2muPOVE0fanryzMiD13aywXH7o6RPAmphADpkeh'
+            'Authorization': pexels_api_key
         }
         
         params = {
@@ -3119,6 +3125,132 @@ async def add_competitor_for_analysis(request: dict):
         logger.error(f"Error adding competitor: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/marketing-strategy/discover-competitors")
+async def discover_business_competitors_endpoint(request: dict):
+    """🔍 Dynamically discover business competitors and their social media links using AI and Google Maps"""
+    try:
+        max_competitors = request.get("max_competitors", 5)
+        use_existing_data = request.get("use_existing_data", True)
+        use_google_maps = request.get("use_google_maps", True)
+        location = request.get("location", None)
+        
+        logger.info(f"🚀 Starting dynamic competitor discovery (Google Maps: {use_google_maps})")
+        logger.info(f"📍 Location: {location or 'Auto-detect'}")
+        logger.info(f"🎯 Max competitors: {max_competitors}")
+        
+        # Load business summary from existing files or request
+        business_summary = ""
+        
+        if use_existing_data:
+            # Try to load from existing business analysis files
+            base_path = Path("agents/output")
+            business_summary_path = base_path / "business_summary.txt"
+            
+            if business_summary_path.exists():
+                with open(business_summary_path, "r", encoding="utf-8") as f:
+                    raw_summary = f.read()
+                    # Clean up the summary
+                    business_summary = raw_summary.split("\nGenerated on")[0] if "\nGenerated on" in raw_summary else raw_summary
+                logger.info("📂 Loaded business summary from existing file")
+            else:
+                logger.warning("⚠️ No existing business summary found")
+        
+        # Fallback to request data
+        if not business_summary:
+            business_summary = request.get("business_summary", "")
+            
+        if not business_summary:
+            raise HTTPException(
+                status_code=400, 
+                detail="Business summary is required. Either provide it in the request or ensure business analysis has been completed."
+            )
+        
+        # Discover competitors using the enhanced AI agent with Google Maps
+        logger.info("🤖 Running enhanced competitor discovery with Google Maps...")
+        discovered_competitors = discover_business_competitors(
+            business_summary, 
+            max_competitors, 
+            use_google_maps=use_google_maps,
+            location=location
+        )
+        
+        if not discovered_competitors:
+            logger.warning("⚠️ No competitors discovered, using fallback data")
+            discovered_competitors = [
+                {
+                    "id": "fallback_1",
+                    "name": "Generic Competitor 1",
+                    "industry": "Technology",
+                    "description": "Technology solutions provider",
+                    "linkedin_url": "https://linkedin.com/company/generic-competitor-1",
+                    "confidence_score": 0.5,
+                    "discovery_method": "fallback"
+                }
+            ]
+        
+        # Extract URLs for marketing analysis
+        linkedin_urls = []
+        tiktok_urls = []
+        google_maps_data = []
+        
+        for competitor in discovered_competitors:
+            if competitor.get("linkedin_url"):
+                linkedin_urls.append(competitor["linkedin_url"])
+            if competitor.get("tiktok_url"):
+                tiktok_urls.append(competitor["tiktok_url"])
+            
+            # Collect Google Maps specific data
+            if competitor.get("place_id"):
+                google_maps_data.append({
+                    "name": competitor["name"],
+                    "place_id": competitor["place_id"],
+                    "address": competitor.get("address"),
+                    "rating": competitor.get("rating"),
+                    "review_count": competitor.get("review_count"),
+                    "phone": competitor.get("phone"),
+                    "website": competitor.get("website")
+                })
+        
+        # Prepare data for marketing analysis
+        analysis_ready_competitors = []
+        for competitor in discovered_competitors:
+            # Create entries for both platforms if URLs exist
+            if competitor.get("linkedin_url"):
+                analysis_ready_competitors.append(competitor["linkedin_url"])
+            if competitor.get("tiktok_url"):
+                analysis_ready_competitors.append(competitor["tiktok_url"])
+        
+        logger.info(f"✅ Successfully discovered {len(discovered_competitors)} competitors")
+        logger.info(f"📊 LinkedIn URLs: {len(linkedin_urls)}, TikTok URLs: {len(tiktok_urls)}")
+        logger.info(f"🗺️ Google Maps data: {len(google_maps_data)} businesses")
+        
+        return {
+            "success": True,
+            "message": f"Successfully discovered {len(discovered_competitors)} business competitors with enhanced Google Maps data",
+            "discovered_competitors": discovered_competitors,
+            "analysis_ready_urls": analysis_ready_competitors,
+            "summary": {
+                "total_competitors": len(discovered_competitors),
+                "linkedin_profiles": len(linkedin_urls),
+                "tiktok_profiles": len(tiktok_urls),
+                "google_maps_businesses": len(google_maps_data),
+                "discovery_method": "AI + Google Maps" if use_google_maps else "AI only"
+            },
+            "linkedin_urls": linkedin_urls,
+            "tiktok_urls": tiktok_urls,
+            "google_maps_data": google_maps_data,
+            "search_parameters": {
+                "use_google_maps": use_google_maps,
+                "location": location,
+                "max_competitors": max_competitors
+            },
+            "business_summary_used": business_summary[:200] + "..." if len(business_summary) > 200 else business_summary
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error in competitor discovery: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to discover competitors: {str(e)}")
+
 @app.post("/marketing-strategy/get-top-posts")
 async def get_top_engaging_posts():
     """Get top engaging posts from LinkedIn and TikTok analysis results"""
@@ -3547,6 +3679,219 @@ async def comprehensive_marketing_analysis(request: SocialMediaAnalysisRequest):
         
     except Exception as e:
         logger.error(f"Comprehensive marketing analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/marketing-strategy/comprehensive-analysis-with-discovery")
+async def comprehensive_marketing_analysis_with_dynamic_discovery(request: dict):
+    """🚀 Enhanced comprehensive marketing analysis with automatic competitor discovery"""
+    try:
+        logger.info("🚀 Starting comprehensive marketing analysis with dynamic competitor discovery")
+        
+        # Configuration from request
+        max_competitors = request.get("max_competitors", 5)
+        use_existing_data = request.get("use_existing_data", True)
+        skip_discovery = request.get("skip_discovery", False)
+        use_google_maps = request.get("use_google_maps", True)
+        location = request.get("location", None)
+        
+        # Read existing analysis files from output directory
+        base_path = Path("agents/output")
+        
+        # Read business summary
+        business_summary = ""
+        business_summary_path = base_path / "business_summary.txt"
+        if business_summary_path.exists():
+            with open(business_summary_path, "r", encoding="utf-8") as f:
+                raw_summary = f.read()
+                business_summary = raw_summary.split("\nGenerated on")[0] if "\nGenerated on" in raw_summary else raw_summary
+        else:
+            business_summary = request.get("business_summary", "")
+        
+        if not business_summary:
+            raise HTTPException(
+                status_code=400, 
+                detail="Business summary is required. Either run business analysis first or provide it in the request."
+            )
+        
+        # Read brand identity data
+        brand_identity = {}
+        brand_identity_files = [
+            "brand_discovery_output.json",
+            "brand_identity_output.json", 
+            "identity_output.json"
+        ]
+        
+        for filename in brand_identity_files:
+            file_path = base_path / filename
+            if file_path.exists():
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        brand_identity.update(json.load(f))
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to read {filename}: {e}")
+        
+        # Read other business data
+        viability_data = {}
+        viability_path = base_path / "viability_assessment_output.json"
+        if viability_path.exists():
+            try:
+                with open(viability_path, "r", encoding="utf-8") as f:
+                    viability_data = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to read viability assessment: {e}")
+        
+        market_data = ""
+        market_path = base_path / "market_analysis_competitors_output.txt"
+        if market_path.exists():
+            with open(market_path, "r", encoding="utf-8") as f:
+                market_data = f.read()
+        
+        financial_data = ""
+        financial_path = base_path / "assessment_output.txt"
+        if financial_path.exists():
+            with open(financial_path, "r", encoding="utf-8") as f:
+                financial_data = f.read()
+        
+        swot_data = {}
+        swot_path = base_path / "swot_complete.json"
+        if swot_path.exists():
+            try:
+                with open(swot_path, "r", encoding="utf-8") as f:
+                    swot_data = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to read SWOT analysis: {e}")
+        
+        bmc_data = ""
+        bmc_path = base_path / "bmc_output.txt"
+        if bmc_path.exists():
+            with open(bmc_path, "r", encoding="utf-8") as f:
+                bmc_data = f.read()
+        
+        # 🔍 DYNAMIC COMPETITOR DISCOVERY
+        discovered_competitors = []
+        linkedin_companies = []
+        tiktok_profiles = []
+        
+        if not skip_discovery:
+            logger.info(f"🤖 Running dynamic competitor discovery (Google Maps: {use_google_maps})...")
+            try:
+                discovered_competitors = discover_business_competitors(
+                    business_summary, 
+                    max_competitors,
+                    use_google_maps=use_google_maps,
+                    location=location
+                )
+                
+                # Extract URLs for analysis
+                for competitor in discovered_competitors:
+                    if competitor.get("linkedin_url"):
+                        linkedin_companies.append(competitor["linkedin_url"])
+                    if competitor.get("tiktok_url"):
+                        profile_name = competitor["tiktok_url"].split("@")[-1].split("/")[0]
+                        tiktok_profiles.append(profile_name)
+                
+                logger.info(f"✅ Discovered {len(discovered_competitors)} competitors")
+                logger.info(f"📊 LinkedIn: {len(linkedin_companies)}, TikTok: {len(tiktok_profiles)}")
+                
+            except Exception as e:
+                logger.error(f"❌ Competitor discovery failed: {e}")
+                discovered_competitors = []
+        else:
+            logger.info("⏭️ Skipping competitor discovery as requested")
+        
+        # Fallback to manual competitors if provided and discovery failed
+        manual_competitors = request.get("competitors", [])
+        if not discovered_competitors and manual_competitors:
+            logger.info("🔄 Using manual competitors as fallback")
+            for competitor in manual_competitors:
+                if "linkedin.com/company/" in competitor:
+                    linkedin_companies.append(competitor)
+                elif "tiktok.com/@" in competitor:
+                    profile_name = competitor.split("@")[-1].split("/")[0]
+                    tiktok_profiles.append(profile_name)
+        
+        # Prepare results structure
+        results = {
+            "analysis_id": str(uuid.uuid4()),
+            "status": "initiated",
+            "competitor_discovery": {
+                "enabled": not skip_discovery,
+                "discovered_competitors": discovered_competitors,
+                "total_discovered": len(discovered_competitors),
+                "linkedin_urls": linkedin_companies,
+                "tiktok_profiles": tiktok_profiles
+            },
+            "linkedin_analysis": None,
+            "tiktok_analysis": None,
+            "business_context": {
+                "summary": business_summary,
+                "brand_identity": brand_identity,
+                "viability": viability_data,
+                "market_analysis": market_data[:500] + "..." if len(market_data) > 500 else market_data,
+                "financial_assessment": financial_data[:500] + "..." if len(financial_data) > 500 else financial_data,
+                "swot_analysis": swot_data,
+                "business_model": bmc_data[:500] + "..." if len(bmc_data) > 500 else bmc_data
+            }
+        }
+        
+        # Start LinkedIn analysis if we have LinkedIn competitors
+        if linkedin_companies:
+            logger.info(f"🔗 Starting LinkedIn analysis for {len(linkedin_companies)} companies")
+            linkedin_request = LinkedInInsightsRequest(
+                company_urls=linkedin_companies,
+                limit=30,
+                min_support=0.05,
+                min_confidence=0.5,
+                min_lift=1.2
+            )
+            
+            try:
+                linkedin_response = await analyze_linkedin_competitor(linkedin_request)
+                results["linkedin_analysis"] = {
+                    "session_id": linkedin_response.session_id,
+                    "status": linkedin_response.status,
+                    "companies": linkedin_companies,
+                    "competitors_analyzed": len(linkedin_companies)
+                }
+                logger.info(f"✅ LinkedIn analysis initiated: {linkedin_response.session_id}")
+            except Exception as e:
+                logger.error(f"❌ LinkedIn analysis failed: {e}")
+                results["linkedin_analysis"] = {"error": str(e)}
+        
+        # Start TikTok analysis if we have TikTok profiles
+        if tiktok_profiles:
+            logger.info(f"🎵 Starting TikTok analysis for {len(tiktok_profiles)} profiles")
+            tiktok_request = TikTokInsightsRequest(
+                profile_names=tiktok_profiles,
+                results_per_page=50,
+                min_support=0.05,
+                min_confidence=0.5,
+                min_lift=1.2
+            )
+            
+            try:
+                tiktok_response = await analyze_tiktok_competitor(tiktok_request)
+                results["tiktok_analysis"] = {
+                    "session_id": tiktok_response.session_id,
+                    "status": tiktok_response.status,
+                    "profiles": tiktok_profiles,
+                    "competitors_analyzed": len(tiktok_profiles)
+                }
+                logger.info(f"✅ TikTok analysis initiated: {tiktok_response.session_id}")
+            except Exception as e:
+                logger.error(f"❌ TikTok analysis failed: {e}")
+                results["tiktok_analysis"] = {"error": str(e)}
+        
+        # Store the analysis for later retrieval
+        sessions[results["analysis_id"]] = results
+        
+        logger.info(f"🎯 Comprehensive marketing analysis initiated: {results['analysis_id']}")
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Comprehensive marketing analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/marketing-strategy/analysis/{analysis_id}/status")

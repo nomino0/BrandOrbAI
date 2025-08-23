@@ -14,8 +14,12 @@ load_dotenv()
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Groq client with the provided API key
-GROQ_API_KEY = "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"
+# Groq client with environment variable
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    logger.warning("GROQ API key not found in environment variables. Image generation may not work.")
+    GROQ_API_KEY = "your-groq-api-key-here"
+
 client = Groq(api_key=GROQ_API_KEY)
 
 def generate_image_prompt(business_summary: str, business_idea: str) -> str:

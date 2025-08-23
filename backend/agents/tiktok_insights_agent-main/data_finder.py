@@ -219,7 +219,7 @@ if __name__ == "__main__":
     # Example usage
     try:
         # Replace with your actual API token
-        API_TOKEN = "apify_api_OwpXbVteuoFNgHZ3gyCWTXjuPxK6rz4omWRn"
+        API_TOKEN = os.getenv("APIFY_API_TOKEN", "your-apify-api-token-here")
         
         # List of profile names to scrape
         profiles_to_scrape = ["talan_tunisie"]

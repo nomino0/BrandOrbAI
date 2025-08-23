@@ -1,0 +1,57 @@
+{
+  "version_id": "your-business-1755597970_v20250819_110610",
+  "website_id": "your-business-1755597970",
+  "timestamp": "20250819_110610",
+  "user_prompt": "",
+  "analysis": {
+    "company_name": "Your Business",
+    "industry": "Business Services",
+    "business_type": "Professional Services",
+    "target_audience": "Business professionals and entrepreneurs",
+    "unique_value_proposition": "Innovative solutions for modern businesses",
+    "key_services": [
+      "Consulting",
+      "Strategy",
+      "Implementation"
+    ],
+    "competitive_advantages": [
+      "Expert team",
+      "Proven results",
+      "Custom approach"
+    ],
+    "brand_colors": [
+      "#2563eb",
+      "#1e40af",
+      "#3b82f6"
+    ],
+    "brand_personality": "Professional, reliable, innovative",
+    "website_sections": [
+      "hero",
+      "about",
+      "services",
+      "testimonials",
+      "contact"
+    ],
+    "call_to_action": "Get Started Today",
+    "seo_keywords": [
+      "business solutions",
+      "consulting",
+      "professional services"
+    ],
+    "tone_of_voice": "professional",
+    "business_model": "B2B",
+    "stage": "growth",
+    "key_metrics": [
+      "Client satisfaction",
+      "Project success rate"
+    ],
+    "social_proof_elements": [
+      "testimonials",
+      "case_studies",
+      "client_logos"
+    ]
+  },
+  "file_size": 20553,
+  "company_name": "Your Business",
+  "industry": "Business Services"
+}

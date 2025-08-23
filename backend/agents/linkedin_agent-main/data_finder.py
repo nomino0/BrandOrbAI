@@ -219,7 +219,7 @@ if __name__ == "__main__":
     # Example usage
     try:
         # Replace with your actual API token
-        API_TOKEN = "apify_api_OwpXbVteuoFNgHZ3gyCWTXjuPxK6rz4omWRn"
+        API_TOKEN = os.getenv("APIFY_API_TOKEN", "your-apify-api-token-here")
         
         # List of company URLs to scrape
         companies_to_scrape = ["https://www.linkedin.com/company/talan-tunisie/posts/?feedView=all"]

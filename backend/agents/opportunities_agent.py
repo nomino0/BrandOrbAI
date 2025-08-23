@@ -1,109 +1,157 @@
-import re
 import os
-from apify_client import ApifyClient
-from groq import Groq
-from .prompts import OPPORTUNITIES_SEARCH_TERM_PROMPT
+import logging
+import re
+import json
+from typing import List, Tuple, Set
+from pydantic import BaseModel, Field
+from tavily import TavilyClient
 from dotenv import load_dotenv
 
+# --- Setup and Configuration ---
 load_dotenv()
-APIFY_API_TOKEN = os.environ.get("APIFY_API_TOKEN")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-def run_opportunities_agent(business_idea: str) -> str:
-    groq_client = Groq(api_key=GROQ_API_KEY)
-    prompt = OPPORTUNITIES_SEARCH_TERM_PROMPT.format(business_idea=business_idea)
-    response = groq_client.chat.completions.create(
-        model="llama3-8b-8192",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=30,
-        temperature=0.7,
+# Initialize the Tavily client
+tavily_api_key = os.getenv("TAVILY_API_KEY")
+if not tavily_api_key:
+    # Fallback for environments where dotenv doesn't load early enough
+    tavily_api_key = os.environ.get("TAVILY_API_KEY")
+if not tavily_api_key:
+    raise ValueError("TAVILY_API_KEY environment variable not set. Please add it to your .env file.")
+tavily = TavilyClient(api_key=tavily_api_key)
+
+class Event(BaseModel):
+    """Data model to hold structured information about a single global event."""
+    name: str
+    date: str = Field(default="Not Found")
+    city: str = Field(default="Not Found")
+    country: str = Field(default="Not Found")
+    source_url: str = Field(default="Not Found")
+
+def _extract_location(content: str) -> Tuple[str, str]:
+    """A helper function to extract city and country from text content."""
+    location_match = re.search(
+        r'\b(in|at|location|venue):\s*([A-Z][a-zA-Z\s.-]+),\s*([A-Z][a-zA-Z\s.-]+)\b',
+        content,
+        re.IGNORECASE
     )
-    search_term_raw = response.choices[0].message.content.strip()
-    match = re.search(r'["“](.+?)["”]', search_term_raw)
-    if match:
-        search_term = match.group(1)
-    else:
-        match = re.search(r'(?:Keyword\s*[:-]\s*|:\s*)([^\n]+)', search_term_raw)
-        if match:
-            search_term = match.group(1).strip()
-        else:
-            search_term = search_term_raw if len(search_term_raw.split()) <= 4 else ""
-    if not search_term:
-        output = "No valid search term could be extracted."
-        results = []
-    else:
-        try:
-            # Use the new Apify actor and input format (new scrapper)
-            client = ApifyClient(APIFY_API_TOKEN)
-            run_input = {
-                "search_type": "company",
-                "search_term": search_term,
-                "max_pages": 0,
-                "start_page": 1,
-                "only_verified_companies": False,
-                "include_company_details": False,
-            }
-            run = client.actor("MrUWjMel0oGyzwTxY").call(run_input=run_input)
-            results = []
-            for item in client.dataset(run["defaultDatasetId"]).iterate_items():
-                results.append(item)
-        except Exception as e:
-            print(f"Apify service error: {e}")
-            # Fallback: Generate mock opportunities data based on business idea
-            results = generate_mock_opportunities(business_idea, search_term)
-    filtered_results = extract_company_fields(results)
+    if location_match:
+        city = location_match.group(2).strip()
+        country = location_match.group(3).strip()
+        if len(city) > 2 and len(country) > 2:
+            return city, country
+            
+    city_match = re.search(r'\b(London|Paris|Berlin|Tokyo|Singapore|Dubai|Toronto|Sydney|Seoul)\b', content, re.IGNORECASE)
+    if city_match:
+        return city_match.group(0), "Not Found"
 
-    output_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "output/opportunities_output.txt"))
-    with open(output_file_path, "w", encoding="utf-8") as f:
-        # Write the filtered results as JSON
-        import json
-        f.write(json.dumps(filtered_results, ensure_ascii=False, indent=2))
-    return output_file_path
+    return "Not Found", "Not Found"
 
-def generate_mock_opportunities(business_idea: str, search_term: str):
-    """Generate mock opportunities data when Apify service is unavailable"""
-    # Create realistic mock data based on the business idea and search term
-    mock_companies = [
-        {
-            "name": f"{search_term.title()} Solutions Inc.",
-            "description": f"Leading provider of {search_term.lower()} services and solutions",
-            "address": {"city": "New York"},
-            "email": f"contact@{search_term.lower().replace(' ', '')}solutions.com",
-            "homepage": f"https://{search_term.lower().replace(' ', '')}-solutions.com",
-            "logoUrl": "",
-            "phoneNumber": "+1-555-0123"
-        },
-        {
-            "name": f"Global {search_term.title()} Partners",
-            "description": f"International network specializing in {search_term.lower()} industry partnerships",
-            "address": {"city": "San Francisco"},
-            "email": f"partnerships@global{search_term.lower().replace(' ', '')}.com",
-            "homepage": f"https://global-{search_term.lower().replace(' ', '')}.com",
-            "logoUrl": "",
-            "phoneNumber": "+1-555-0456"
-        },
-        {
-            "name": f"{search_term.title()} Connect Ltd.",
-            "description": f"Connecting businesses in the {search_term.lower()} sector with growth opportunities",
-            "address": {"city": "Austin"},
-            "email": f"info@{search_term.lower().replace(' ', '')}connect.com",
-            "homepage": f"https://{search_term.lower().replace(' ', '')}-connect.com",
-            "logoUrl": "",
-            "phoneNumber": "+1-555-0789"
-        }
+# CORRECTED FUNCTION: Renamed and modified to return the file path
+def run_opportunities_agent(business_idea: str) -> str:
+    """
+    Performs a broad, global search for relevant events and saves them to a file.
+
+    Args:
+        business_idea: The core concept of the business (e.g., "generative AI startups").
+
+    Returns:
+        The path to the output file containing the event data.
+    """
+    if not business_idea:
+        logger.error("Business idea cannot be empty.")
+        raise ValueError("Please provide a valid business idea.")
+
+    logger.info(f"Starting GLOBAL event search for: '{business_idea}'")
+
+    discovery_queries = [
+        f"list of global conferences for '{business_idea}' in 2024 and 2025",
+        f"top international trade shows for the '{business_idea}' industry",
+        f"major European tech summits for '{business_idea}'",
+        f"leading Asian expos and forums for '{business_idea}'",
+        f"must-attend North American events for '{business_idea}' startups"
     ]
-    return mock_companies
 
-def extract_company_fields(companies):
-    extracted = []
-    for company in companies:
-        extracted.append({
-            "name": company.get("name", "") or "",
-            "description": company.get("description", "") or "",
-            "city": company.get("address", {}).get("city", "") if company.get("address") else "",
-            "email": company.get("email", "") or "",
-            "homepage": company.get("homepage", "") or "",
-            "logoUrl": company.get("logoUrl", "") or "",
-            "phoneNumber": company.get("phoneNumber", "") or ""
-        })
-    return extracted
+    event_candidates: Set[str] = set()
+    all_search_content = ""
+
+    for query in discovery_queries:
+        logger.info(f"Executing Tavily search: \"{query}\"")
+        try:
+            discovery_data = tavily.search(query=query, search_depth="advanced", max_results=5)
+            content = " ".join([result.get('content', '') for result in discovery_data.get('results', [])])
+            all_search_content += content + " "
+            
+            found_names = re.findall(r'\b([A-Z][a-zA-Z0-9\s-]{4,}\b(?:Conference|Expo|Summit|Show|Week|Days|Forum|Festival|Connect))\b', content)
+            for name in found_names:
+                event_candidates.add(name.strip().replace("  ", " "))
+
+        except Exception as e:
+            logger.error(f"Tavily search for query '{query}' failed: {e}")
+            continue
+    
+    if not event_candidates:
+        logger.warning("No potential event candidates found from the global search.")
+        return "No events found."
+        
+    logger.info(f"Found {len(event_candidates)} unique potential events to investigate globally.")
+
+    verified_events: List[Event] = []
+    for event_name in list(event_candidates)[:15]:
+        logger.info(f"Investigating event: '{event_name}'")
+        try:
+            detail_query = f"official website date and location for the event '{event_name}'"
+            detail_data = tavily.search(query=detail_query, search_depth="basic", max_results=1)
+
+            if not (detail_data and detail_data.get("results")):
+                logger.warning(f"Could not find specific details for '{event_name}'. Skipping.")
+                continue
+
+            top_result = detail_data["results"][0]
+            event_url = top_result.get("url", "Not Found")
+            result_content = top_result.get("content", "")
+
+            date_match = re.search(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:(?:st|nd|rd|th)|(?:-\d{1,2}(?:st|nd|rd|th)?))?,\s+\d{4})\b', result_content, re.IGNORECASE)
+            event_date = date_match.group(0) if date_match else "Not Found"
+
+            city, country = _extract_location(result_content)
+
+            event = Event(name=event_name, date=event_date, city=city, country=country, source_url=event_url)
+            verified_events.append(event)
+            logger.info(f"-> Success for '{event.name}': [Date: {event.date}, Location: {event.city}, {event.country}]")
+
+        except Exception as e:
+            logger.error(f"Failed to process details for event '{event_name}': {e}")
+    
+    # --- Define output path and save file ---
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(base_dir, "output")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Use a new filename to avoid confusion with the old output
+    output_filename = os.path.join(output_dir, "global_events_output.json")
+    
+    if verified_events:
+        logger.info(f"Saving {len(verified_events)} verified global events to '{output_filename}'")
+        events_dict_list = [event.model_dump() for event in verified_events]
+        
+        # Overwrite the file with new results for each run
+        with open(output_filename, "w", encoding="utf-8") as f:
+            json.dump(events_dict_list, f, indent=4)
+    else:
+        # If no events are found, write an empty list to the file
+        with open(output_filename, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=4)
+
+    # CORRECTED: Return the path to the output file
+    return output_filename
+
+# --- Example Usage for a Global Search ---
+if __name__ == "__main__":
+    my_business_idea = "Financial Technology (FinTech) solutions"
+    print(f"--- Starting a global search for events related to '{my_business_idea}'... ---")
+    
+    # Updated to call the new function name
+    output_file = run_opportunities_agent(my_business_idea)
+    print(f"--- Search complete. Results saved to: {output_file} ---")

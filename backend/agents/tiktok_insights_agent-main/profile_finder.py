@@ -1,6 +1,7 @@
 from apify_client import ApifyClient
 from typing import List, Optional
 import logging
+import os
 
 class TikTokProfileSearcher:
     """A class to search for TikTok profiles using Apify."""
@@ -97,7 +98,7 @@ def find_tiktok_profile(api_token: str, search_query: str) -> Optional[str]:
 # Example usage
 if __name__ == "__main__":
     # Replace with your actual Apify API token
-    API_TOKEN = "apify_api_OwpXbVteuoFNgHZ3gyCWTXjuPxK6rz4omWRn"
+    API_TOKEN = os.getenv("APIFY_API_TOKEN", "your-apify-api-token-here")
     
     # Create searcher instance
     searcher = TikTokProfileSearcher(API_TOKEN)

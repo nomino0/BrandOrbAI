@@ -1,0 +1,73 @@
+{
+  "discovery_metadata": {
+    "timestamp": "2025-08-19T11:18:14.832361",
+    "business_context": {
+      "company_name": "Unknown Company",
+      "industry": "E-Learning",
+      "business_model": "B2B",
+      "target_market": "Enterprise",
+      "key_services": [
+        "Online Education",
+        "Training",
+        "Learning Platform"
+      ],
+      "business_type": "startup",
+      "geographic_focus": "international",
+      "technology_focus": "Software",
+      "unique_value_prop": "Innovation and quality"
+    },
+    "total_competitors": 5
+  },
+  "competitors": [
+    {
+      "name": "Coursera",
+      "industry": "E-Learning",
+      "description": "Online course platform",
+      "linkedin_url": "https://linkedin.com/company/coursera",
+      "tiktok_url": "https://tiktok.com/@coursera",
+      "website": null,
+      "confidence_score": 0.9,
+      "discovery_method": ""
+    },
+    {
+      "name": "Udemy",
+      "industry": "E-Learning",
+      "description": "Online learning marketplace",
+      "linkedin_url": "https://linkedin.com/company/udemy",
+      "tiktok_url": "https://tiktok.com/@udemy",
+      "website": null,
+      "confidence_score": 0.9,
+      "discovery_method": ""
+    },
+    {
+      "name": "Khan Academy",
+      "industry": "E-Learning",
+      "description": "Free online education",
+      "linkedin_url": "https://linkedin.com/company/khan-academy",
+      "tiktok_url": "https://tiktok.com/@khanacademy",
+      "website": null,
+      "confidence_score": 0.8,
+      "discovery_method": ""
+    },
+    {
+      "name": "Skillshare",
+      "industry": "E-Learning",
+      "description": "Creative skills platform",
+      "linkedin_url": "https://linkedin.com/company/skillshare",
+      "tiktok_url": "https://tiktok.com/@skillshare",
+      "website": null,
+      "confidence_score": 0.8,
+      "discovery_method": ""
+    },
+    {
+      "name": "MasterClass",
+      "industry": "E-Learning",
+      "description": "Premium video lessons",
+      "linkedin_url": "https://linkedin.com/company/masterclass",
+      "tiktok_url": "https://tiktok.com/@masterclass",
+      "website": null,
+      "confidence_score": 0.7,
+      "discovery_method": ""
+    }
+  ]
+}

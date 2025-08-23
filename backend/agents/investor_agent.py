@@ -1,6 +1,7 @@
 import json
 import requests
 import os
+import logging
 from typing import List, Dict, Any
 import requests
 import json
@@ -8,8 +9,15 @@ import os
 from fastapi import HTTPException
 from datetime import datetime
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 # Together AI API credentials
-TOGETHER_API_KEY = "tgp_v1_wW2zTwc3ZZQrmlewVdd4Vr9utNs3YvYfJYYZVf5Noek"
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
+if not TOGETHER_API_KEY:
+    logger.warning("TOGETHER API key not found in environment variables. Investor analysis may not work.")
+    TOGETHER_API_KEY = "your-together-api-key-here"
+
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
 
 def load_investors(file_path=None):

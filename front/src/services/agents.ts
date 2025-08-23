@@ -1637,3 +1637,156 @@ export async function saveInvestorAnalysis(analysisData: any): Promise<{ success
   
   return response.json();
 }
+
+// =============================================================================
+// COMPETITOR DISCOVERY FUNCTIONS
+// =============================================================================
+
+export interface DiscoveredCompetitor {
+  id: string;
+  name: string;
+  industry: string;
+  description: string;
+  linkedin_url?: string;
+  tiktok_url?: string;
+  website?: string;
+  confidence_score: number;
+  discovery_method: string;
+  place_id?: string;
+  address?: string;
+  phone?: string;
+  rating?: number;
+  review_count?: number;
+}
+
+export interface CompetitorDiscoveryResponse {
+  success: boolean;
+  message: string;
+  discovered_competitors: DiscoveredCompetitor[];
+  analysis_ready_urls: string[];
+  summary: {
+    total_competitors: number;
+    linkedin_profiles: number;
+    tiktok_profiles: number;
+    google_maps_businesses: number;
+    discovery_method: string;
+  };
+  linkedin_urls: string[];
+  tiktok_urls: string[];
+  google_maps_data: any[];
+  search_parameters: {
+    use_google_maps: boolean;
+    location?: string;
+    max_competitors: number;
+  };
+}
+
+export interface CompetitorDiscoveryRequest {
+  business_summary?: string;
+  max_competitors?: number;
+  use_google_maps?: boolean;
+  location?: string;
+}
+
+// Discover competitors using AI and Google Maps
+export async function discoverCompetitors(request: CompetitorDiscoveryRequest): Promise<CompetitorDiscoveryResponse> {
+  // Get business summary from localStorage if not provided
+  let businessSummary = request.business_summary;
+  
+  if (!businessSummary && typeof window !== 'undefined') {
+    // Try multiple sources for business summary
+    businessSummary = 
+      localStorage.getItem('business_summary') || 
+      localStorage.getItem('brandorb_business_summary') ||
+      localStorage.getItem('ideation_summary') ||
+      '';
+  }
+
+  // If still no business summary, provide a generic fallback
+  if (!businessSummary) {
+    businessSummary = "Technology consulting and software development company focusing on digital transformation solutions for enterprise clients. We help businesses modernize their operations through innovative technology solutions, cloud migration, and digital strategy consulting.";
+    console.warn('No business summary found, using fallback for competitor discovery');
+  }
+
+  const response = await fetch(`${BACKEND_URL}/marketing-strategy/discover-competitors`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      business_summary: businessSummary,
+      max_competitors: request.max_competitors || 5,
+      use_google_maps: request.use_google_maps !== false, // Default to true
+      location: request.location || undefined
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to discover competitors');
+  }
+
+  return response.json();
+}
+
+// Convert discovered competitors to the Competitor interface format used by the UI
+export function convertDiscoveredCompetitorsToUI(discovered: DiscoveredCompetitor[]): Array<{
+  id: string;
+  url: string;
+  platform: 'linkedin' | 'tiktok';
+  name: string;
+  industry?: string;
+  description?: string;
+  confidence_score?: number;
+  discovery_method?: string;
+  place_id?: string;
+  address?: string;
+  phone?: string;
+  rating?: number;
+  review_count?: number;
+  website?: string;
+}> {
+  const competitors: Array<any> = [];
+
+  discovered.forEach((comp, index) => {
+    // Add LinkedIn competitor if URL exists
+    if (comp.linkedin_url) {
+      competitors.push({
+        id: `linkedin-${comp.id || index}`,
+        url: comp.linkedin_url,
+        platform: 'linkedin' as const,
+        name: comp.name,
+        industry: comp.industry,
+        description: comp.description,
+        confidence_score: comp.confidence_score,
+        discovery_method: comp.discovery_method,
+        place_id: comp.place_id,
+        address: comp.address,
+        phone: comp.phone,
+        rating: comp.rating,
+        review_count: comp.review_count,
+        website: comp.website,
+      });
+    }
+
+    // Add TikTok competitor if URL exists
+    if (comp.tiktok_url) {
+      competitors.push({
+        id: `tiktok-${comp.id || index}`,
+        url: comp.tiktok_url,
+        platform: 'tiktok' as const,
+        name: comp.name,
+        industry: comp.industry,
+        description: comp.description,
+        confidence_score: comp.confidence_score,
+        discovery_method: comp.discovery_method,
+        place_id: comp.place_id,
+        address: comp.address,
+        phone: comp.phone,
+        rating: comp.rating,
+        review_count: comp.review_count,
+        website: comp.website,
+      });
+    }
+  });
+
+  return competitors;
+}

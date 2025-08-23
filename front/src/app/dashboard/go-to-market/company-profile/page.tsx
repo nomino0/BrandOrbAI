@@ -891,59 +891,6 @@ export default function CompanyProfilePage() {
                   </Card>
                 )}
 
-                {/* Generation Controls */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm">Generation Settings</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label htmlFor="style" className="text-sm font-medium">Style Preference</Label>
-                      <Select value={stylePreferences} onValueChange={setPersistedStylePreferences}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="modern">Modern & Clean</SelectItem>
-                          <SelectItem value="professional">Professional & Corporate</SelectItem>
-                          <SelectItem value="creative">Creative & Bold</SelectItem>
-                          <SelectItem value="elegant">Elegant & Sophisticated</SelectItem>
-                          <SelectItem value="minimal">Minimal & Simple</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="prompt" className="text-sm font-medium">Custom Requirements</Label>
-                      <Textarea
-                        id="prompt"
-                        value={userPrompt}
-                        onChange={(e) => setPersistedUserPrompt(e.target.value)}
-                        placeholder="Describe any specific requirements for your website..."
-                        className="mt-1 min-h-[100px] text-sm"
-                      />
-                    </div>
-
-                    <Button
-                      onClick={generateWebsite}
-                      disabled={generating || !businessData}
-                      className="w-full"
-                    >
-                      {generating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          Generate Website
-                        </>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-
                 {/* Website Versions */}
                 {websiteVersions.length > 0 && (
                   <Card>
@@ -1003,12 +950,22 @@ export default function CompanyProfilePage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <h3 className="font-semibold text-gray-900">Website Preview</h3>
+                  {currentHtml && (
+                    <Badge variant="secondary" className="text-xs">
+                      {currentHtml.includes('GeneratedLandingPage') ? 'TSX Component' : 'HTML'}
+                    </Badge>
+                  )}
+                </div>
+                
+                {/* Device Preview Toggle */}
+                <div className="flex items-center gap-4">
                   <div className="flex items-center border border-gray-300 rounded-md">
                     <Button
                       variant={previewMode === 'desktop' ? 'default' : 'ghost'}
                       size="sm"
                       onClick={() => setPreviewMode('desktop')}
-                      className="rounded-r-none"
+                      className="rounded-r-none border-r"
+                      title="Desktop Preview"
                     >
                       <Monitor className="h-4 w-4" />
                     </Button>
@@ -1016,7 +973,8 @@ export default function CompanyProfilePage() {
                       variant={previewMode === 'tablet' ? 'default' : 'ghost'}
                       size="sm"
                       onClick={() => setPreviewMode('tablet')}
-                      className="rounded-none"
+                      className="rounded-none border-r"
+                      title="Tablet Preview"
                     >
                       <Tablet className="h-4 w-4" />
                     </Button>
@@ -1025,98 +983,68 @@ export default function CompanyProfilePage() {
                       size="sm"
                       onClick={() => setPreviewMode('mobile')}
                       className="rounded-l-none"
+                      title="Mobile Preview"
                     >
                       <Smartphone className="h-4 w-4" />
                     </Button>
                   </div>
-                </div>
-                <Button
-                  onClick={() => setShowRawHtml(!showRawHtml)}
-                  variant="outline"
-                  size="sm"
-                  disabled={!currentHtml}
-                >
-                  {showRawHtml ? 'Hide' : 'Show'} HTML Debug
-                </Button>
-              </div>
 
-              {/* Preview Controls */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 border-b">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={reloadPreview}
-                    disabled={!currentHtml || generating}
-                    title="Reload Preview"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowRawHtml(!showRawHtml)}
-                    disabled={!currentHtml}
-                    title="Show HTML Code"
-                  >
-                    <Code className="h-4 w-4" />
-                    {showRawHtml ? " Hide" : " Show"} HTML
-                  </Button>
-                </div>
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={reloadPreview}
+                      disabled={!currentHtml || generating}
+                      title="Reload Preview"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowRawHtml(!showRawHtml)}
+                      disabled={!currentHtml}
+                      title="Toggle HTML Debug"
+                    >
+                      <Code className="h-4 w-4" />
+                    </Button>
 
-                <div className="flex items-center border border-gray-300 rounded-md">
-                  <Button
-                    variant={previewMode === 'desktop' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setPreviewMode('desktop')}
-                    className="rounded-r-none"
-                  >
-                    <Monitor className="h-4 w-4" />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadWebsite}
+                      disabled={!currentHtml || generating}
+                      title="Download Website"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      onClick={publishWebsite}
+                      disabled={publishing || !currentVersionId || generating}
+                      className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      size="sm"
+                    >
+                      {publishing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Publishing...
+                        </>
+                      ) : generating ? (
+                        <>
+                          <Clock className="mr-2 h-4 w-4" />
+                          Wait...
+                        </>
+                      ) : (
+                        <>
+                          <Rocket className="mr-2 h-4 w-4" />
+                          Publish
+                        </>
+                      )}
                     </Button>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={downloadWebsite}
-                    disabled={!currentHtml || generating}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!currentHtml || generating}
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    Save
-                  </Button>
-                  <Button
-                    onClick={publishWebsite}
-                    disabled={publishing || !currentVersionId || generating}
-                    className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {publishing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Publishing...
-                      </>
-                    ) : generating ? (
-                      <>
-                        <Clock className="mr-2 h-4 w-4" />
-                        Wait for Generation
-                      </>
-                    ) : (
-                      <>
-                        <Rocket className="mr-2 h-4 w-4" />
-                        Publish Live
-                      </>
-                    )}
-                  </Button>
                 </div>
               </div>
             </div>
@@ -1440,6 +1368,29 @@ export default function CompanyProfilePage() {
           )}
         </div>
       </div>
-    
+      
+      {/* Show Raw HTML Modal/Panel */}
+      {showRawHtml && currentHtml && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] m-4">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">HTML Source Code</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRawHtml(false)}
+              >
+                Close
+              </Button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[60vh]">
+              <pre className="text-sm bg-gray-100 p-4 rounded overflow-x-auto">
+                <code>{currentHtml}</code>
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

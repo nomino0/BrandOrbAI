@@ -1,0 +1,57 @@
+{
+  "version_id": "rust-learning-platform-1755600084_v20250819_114124",
+  "website_id": "rust-learning-platform-1755600084",
+  "timestamp": "20250819_114124",
+  "user_prompt": "",
+  "analysis": {
+    "company_name": "Rust Learning Platform",
+    "industry": "E-learning",
+    "business_type": "Subscription-based online learning platform",
+    "target_audience": "Developers interested in learning Rust",
+    "unique_value_proposition": "Structured and supportive online learning environment for Rust developers",
+    "key_services": [
+      "Interactive coding lessons",
+      "Real-time collaboration tools",
+      "Comprehensive Rust curriculum"
+    ],
+    "competitive_advantages": [
+      "Founder's experience in Rust development",
+      "Niche focus on Rust programming language"
+    ],
+    "brand_colors": [
+      "#2563eb",
+      "#1e40af",
+      "#3b82f6",
+      "#60a5fa",
+      "#93c5fd"
+    ],
+    "brand_personality": "Innovative, Professional, Trustworthy, Modern, Intelligent",
+    "website_sections": [
+      "Hero",
+      "About",
+      "Courses",
+      "Testimonials",
+      "Contact"
+    ],
+    "call_to_action": "Start Learning Rust Today",
+    "seo_keywords": [
+      "Rust programming language",
+      "Online Rust courses",
+      "Learn Rust online"
+    ],
+    "tone_of_voice": "Professional and supportive",
+    "business_model": "B2C",
+    "stage": "Startup",
+    "key_metrics": [
+      "Number of subscribers",
+      "Course completion rate"
+    ],
+    "social_proof_elements": [
+      "Testimonials from satisfied learners",
+      "Rust community endorsements"
+    ]
+  },
+  "file_size": 19206,
+  "company_name": "Rust Learning Platform",
+  "industry": "E-learning"
+}
